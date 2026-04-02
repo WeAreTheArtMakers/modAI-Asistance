@@ -135,6 +135,22 @@ export class SessionStore {
     `).all(limit)
   }
 
+  async deleteSession(sessionId) {
+    const db = await this.ensureDb()
+    db.exec('BEGIN')
+    try {
+      db.prepare('DELETE FROM messages WHERE session_id = ?').run(sessionId)
+      db.prepare('DELETE FROM notes WHERE session_id = ?').run(sessionId)
+      db.prepare('DELETE FROM scheduled_tasks WHERE session_id = ?').run(sessionId)
+      const result = db.prepare('DELETE FROM sessions WHERE session_id = ?').run(sessionId)
+      db.exec('COMMIT')
+      return result.changes > 0
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   async search(query, limit = 8) {
     const db = await this.ensureDb()
     const likePattern = `%${String(query ?? '').trim()}%`

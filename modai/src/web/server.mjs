@@ -21,8 +21,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const staticDir = join(__dirname, 'static')
 const configStore = new ConfigStore()
 const sessionStore = new SessionStore(configStore)
-const skillStore = new SkillStore(configStore)
-const pluginStore = new PluginStore(configStore)
 const providerRegistry = createDefaultProviderRegistry()
 
 const args = new Map()
@@ -38,6 +36,9 @@ const port = Number(args.get('port') || process.env.PORT || process.env.MODAI_WE
 const host = process.env.MODAI_WEB_HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1')
 const parentPid = Number(process.env.MODAI_PARENT_PID || 0)
 const workspaceDir = process.env.MODAI_WORKSPACE_DIR || process.cwd()
+const runtimeProjectDir = process.env.MODAI_RUNTIME_DIR || process.cwd()
+const skillStore = new SkillStore(configStore, { cwd: runtimeProjectDir })
+const pluginStore = new PluginStore(configStore, { cwd: runtimeProjectDir })
 
 const server = createServer(async (request, response) => {
   try {
@@ -68,6 +69,15 @@ const server = createServer(async (request, response) => {
         return sendJson(response, 404, { error: 'Session not found' })
       }
       return sendJson(response, 200, session)
+    }
+
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/sessions/')) {
+      const sessionId = decodeURIComponent(url.pathname.slice('/api/sessions/'.length))
+      const deleted = await sessionStore.deleteSession(sessionId)
+      if (!deleted) {
+        return sendJson(response, 404, { error: 'Session not found' })
+      }
+      return sendJson(response, 200, { ok: true, sessionId })
     }
 
     if (request.method === 'POST' && url.pathname === '/api/settings') {

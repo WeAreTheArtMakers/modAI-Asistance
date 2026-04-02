@@ -1,6 +1,6 @@
 export function createDefaultConfig() {
   return {
-    version: 5,
+    version: 6,
     defaultModel: 'ollama:llama3.2',
     mode: {
       active: 'pro',
@@ -155,6 +155,7 @@ export function mergeConfigWithDefaults(config = {}) {
     },
   }
 
+  applyLegacyUpgrades(config, merged)
   merged.version = defaults.version
   return merged
 }
@@ -234,4 +235,12 @@ function mergeModelDefinitions(defaultModels, incomingModels) {
   }
 
   return merged
+}
+
+function applyLegacyUpgrades(rawConfig, mergedConfig) {
+  const previousVersion = Number(rawConfig?.version ?? 0)
+
+  if (previousVersion < 6 && mergedConfig.permissions?.tools?.open === 'ask') {
+    mergedConfig.permissions.tools.open = 'allow'
+  }
 }

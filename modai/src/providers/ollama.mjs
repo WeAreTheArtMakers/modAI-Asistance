@@ -18,13 +18,16 @@ export function createOllamaProvider(alias, providerConfig) {
         stream: false,
         messages: [
           { role: 'system', content: system },
-          ...normalizedMessages.map(message => ({
-            role: message.role,
-            content: ensurePromptText(message.text, message.attachments),
-            ...(message.attachments.length ? {
-              images: message.attachments.map(attachment => attachment.base64),
-            } : {}),
-          })),
+          ...normalizedMessages.map(message => {
+            const attachments = Array.isArray(message.attachments) ? message.attachments : []
+            return {
+              role: message.role,
+              content: ensurePromptText(message.text, attachments),
+              ...(attachments.length ? {
+                images: attachments.map(attachment => attachment.base64),
+              } : {}),
+            }
+          }),
         ],
       })
 

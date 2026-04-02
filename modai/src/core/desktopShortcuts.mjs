@@ -7,8 +7,19 @@ export function createDesktopShortcut(content) {
     return null
   }
 
+  const fields = parseStructuredFields(text)
+  const structuredIntent = [
+    text,
+    fields.gorev,
+    fields.amac,
+    fields.kisitlar,
+    fields.tamamlanmaKriteri,
+    fields.teslim,
+  ].filter(Boolean).join('\n')
+
   const chromeRequested = /\b(?:chrome|chorme|google chrome)\b/i.test(text)
-  const youtubeQuery = extractSearchQuery(text, 'youtube')
+  const youtubeQuery = extractSearchQuery(structuredIntent, 'youtube')
+    || deriveYoutubeQueryFromFields(fields)
   if (youtubeQuery) {
     return {
       toolName: 'open',
@@ -20,7 +31,18 @@ export function createDesktopShortcut(content) {
     }
   }
 
-  const googleQuery = extractSearchQuery(text, 'google')
+  if (/\byoutube\b/i.test(structuredIntent)) {
+    return {
+      toolName: 'open',
+      input: {
+        target: 'https://www.youtube.com',
+        ...(chromeRequested ? { application: 'Google Chrome' } : {}),
+      },
+      successMessage: 'YouTube acildi.',
+    }
+  }
+
+  const googleQuery = extractSearchQuery(structuredIntent, 'google')
   if (googleQuery) {
     return {
       toolName: 'open',
@@ -32,7 +54,7 @@ export function createDesktopShortcut(content) {
     }
   }
 
-  const urlMatch = text.match(/https?:\/\/\S+/i)
+  const urlMatch = structuredIntent.match(/https?:\/\/\S+/i)
   if (urlMatch) {
     return {
       toolName: 'open',
@@ -44,7 +66,7 @@ export function createDesktopShortcut(content) {
     }
   }
 
-  if (chromeRequested && /\b(?:ac|aç|open)\b/i.test(text)) {
+  if (chromeRequested && /\b(?:ac|aç|open)\b/i.test(structuredIntent)) {
     return {
       toolName: 'open',
       input: {
@@ -106,4 +128,72 @@ function cleanQuery(value) {
       .replace(/^[,:-]+/, '')
       .replace(/[,:-]+$/, ''),
   )
+}
+
+function parseStructuredFields(text) {
+  const fields = {
+    gorev: '',
+    amac: '',
+    kisitlar: '',
+    teslim: '',
+    tamamlanmaKriteri: '',
+  }
+
+  for (const rawLine of String(text ?? '').split('\n')) {
+    const line = rawLine.trim()
+    if (!line) {
+      continue
+    }
+
+    const match = line.match(/^(Gorev|Görev|Amac|Amaç|Kisitlar|Kısıtlar|Teslim|Tamamlanma Kriteri)\s*:\s*(.*)$/i)
+    if (!match) {
+      continue
+    }
+
+    const key = normalizeFieldKey(match[1])
+    fields[key] = cleanQuery(match[2])
+  }
+
+  return fields
+}
+
+function normalizeFieldKey(value) {
+  const normalized = String(value ?? '').toLowerCase()
+  if (normalized.startsWith('gorev') || normalized.startsWith('görev')) {
+    return 'gorev'
+  }
+  if (normalized.startsWith('amac') || normalized.startsWith('amaç')) {
+    return 'amac'
+  }
+  if (normalized.startsWith('kisit') || normalized.startsWith('kısıt')) {
+    return 'kisitlar'
+  }
+  if (normalized.startsWith('teslim')) {
+    return 'teslim'
+  }
+  return 'tamamlanmaKriteri'
+}
+
+function deriveYoutubeQueryFromFields(fields) {
+  const candidates = [
+    fields.tamamlanmaKriteri,
+    fields.amac,
+    fields.gorev,
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    const cleaned = cleanQuery(
+      candidate
+        .replace(/\byoutube\b/gi, '')
+        .replace(/\b(?:video(?:lari|ları|lari)?|videolarini|sonuclari|sonuçlari)\b/gi, '')
+        .replace(/\b(?:goster|göster|gelsin|gorunuyor|görünüyor|ac|aç|ziyaret et|izle|ara|search)\b/gi, '')
+        .replace(/\b(?:olsun|gibi|icin|için)\b/gi, ''),
+    )
+
+    if (cleaned && !/^\b(?:yok|none|bos|boş)\b$/i.test(cleaned)) {
+      return cleaned
+    }
+  }
+
+  return ''
 }

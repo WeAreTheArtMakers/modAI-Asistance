@@ -27,22 +27,25 @@ export function createOpenAICompatibleProvider(alias, providerConfig) {
         model,
         messages: [
           { role: 'system', content: system },
-          ...normalizedMessages.map(message => ({
-            role: message.role,
-            content: message.attachments.length
-              ? [
-                  ...(ensurePromptText(message.text, message.attachments)
-                    ? [{ type: 'text', text: ensurePromptText(message.text, message.attachments) }]
-                    : []),
-                  ...message.attachments.map(attachment => ({
-                    type: 'image_url',
-                    image_url: {
-                      url: attachment.dataUrl,
-                    },
-                  })),
-                ]
-              : ensurePromptText(message.text, message.attachments),
-          })),
+          ...normalizedMessages.map(message => {
+            const attachments = Array.isArray(message.attachments) ? message.attachments : []
+            return {
+              role: message.role,
+              content: attachments.length
+                ? [
+                    ...(ensurePromptText(message.text, attachments)
+                      ? [{ type: 'text', text: ensurePromptText(message.text, attachments) }]
+                      : []),
+                    ...attachments.map(attachment => ({
+                      type: 'image_url',
+                      image_url: {
+                        url: attachment.dataUrl,
+                      },
+                    })),
+                  ]
+                : ensurePromptText(message.text, attachments),
+            }
+          }),
         ],
         temperature: 0.2,
       }, { headers })

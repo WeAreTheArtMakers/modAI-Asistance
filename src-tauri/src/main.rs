@@ -123,6 +123,7 @@ fn ensure_server_running(runtime_dir: &Path, port: u16) -> Result<Option<Child>,
         .current_dir(&workspace_dir)
         .env("MODAI_PARENT_PID", std::process::id().to_string())
         .env("MODAI_WORKSPACE_DIR", &workspace_dir)
+        .env("MODAI_RUNTIME_DIR", runtime_dir)
         .env("PATH", resolve_path_env())
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr))

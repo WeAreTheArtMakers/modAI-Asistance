@@ -70,4 +70,10 @@ test('SessionStore persists sessions, message search, and notes in SQLite', asyn
   const tasks = await sessionStore.listScheduledTasks(5)
   assert.equal(tasks.length, 1)
   assert.equal(tasks[0].delivery, '2026-04-03 09:00')
+
+  const deleted = await sessionStore.deleteSession(sessionId)
+  assert.equal(deleted, true)
+
+  const deletedSession = await sessionStore.loadSession(sessionId)
+  assert.equal(deletedSession, null)
 })

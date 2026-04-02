@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -15,4 +15,23 @@ test('ConfigStore creates a default config when missing', async () => {
 
   assert.equal(config.defaultModel, 'ollama:llama3.2')
   assert.match(raw, /ollama/)
+})
+
+test('ConfigStore upgrades legacy open permission for desktop control', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'modai-config-upgrade-'))
+  const store = new ConfigStore({ baseDir, fallbackBaseDir: baseDir })
+  await store.ensureLayout()
+  await writeFile(store.getConfigPath(), JSON.stringify({
+    version: 5,
+    permissions: {
+      tools: {
+        open: 'ask',
+      },
+    },
+  }, null, 2), 'utf8')
+
+  const config = await store.load()
+
+  assert.equal(config.permissions.tools.open, 'allow')
+  assert.equal(config.version, 6)
 })

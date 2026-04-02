@@ -52,6 +52,7 @@ const imageInput = document.getElementById('imageInput')
 const taskModeButton = document.getElementById('taskModeButton')
 const desktopModeButton = document.getElementById('desktopModeButton')
 const attachmentStrip = document.getElementById('attachmentStrip')
+const composerExamples = document.getElementById('composerExamples')
 
 const state = {
   settings: null,
@@ -63,12 +64,80 @@ const state = {
   startedAt: new Date().toISOString(),
   composerMode: 'chat',
   pendingAttachments: [],
+  thinkingNode: null,
 }
 
 const MODE_LABELS = {
   chat: 'Standart sohbet',
   task: 'Görev modu',
   desktop: 'Bilgisayar kontrolü',
+}
+
+const MODE_EXAMPLES = {
+  desktop: [
+    {
+      title: 'Chrome ve YouTube',
+      hint: 'Chrome acip YouTube arama sonucunu gosterir.',
+      prompt: [
+        'Gorev: Google Chrome ac ve YouTube ziyaret et',
+        'Amac: Baran Gulesen videolarini bulmak',
+        'Kisitlar: Yalnizca Google Chrome kullan, yeni bir sekmede ac',
+        'Tamamlanma Kriteri: Baran Gulesen YouTube arama sonuclari gorunuyor',
+      ].join('\n'),
+    },
+    {
+      title: 'Finder ve Downloads',
+      hint: 'Finder acip Downloads klasorune gider.',
+      prompt: [
+        'Gorev: Finder ac ve Downloads klasorunu goster',
+        'Amac: indirilen dosyalari kontrol etmek',
+        'Kisitlar: Sadece Finder kullan',
+        'Tamamlanma Kriteri: Downloads klasoru ekranda acik',
+      ].join('\n'),
+    },
+    {
+      title: 'Ekran goruntusu al',
+      hint: 'Ekran yakalar ve kaydeder.',
+      prompt: [
+        'Gorev: mevcut ekrandan ekran goruntusu al',
+        'Amac: acik pencerenin bir kopyasini kaydetmek',
+        'Kisitlar: dosyayi masaustune kaydet',
+        'Tamamlanma Kriteri: ekran goruntusu dosyasi olustu',
+      ].join('\n'),
+    },
+  ],
+  task: [
+    {
+      title: 'Sabah hatirlaticisi',
+      hint: 'Yarin sabah icin kisa bir hatirlatici kaydi olusturur.',
+      prompt: [
+        'Gorev: Sabah toplantisini hatirlat',
+        'Amac: yarin 09:00 toplantisini kacirmamak',
+        'Kisitlar: kisa ve net olsun',
+        'Teslim: 2026-04-03 09:00',
+      ].join('\n'),
+    },
+    {
+      title: 'Haftalik rapor gorevi',
+      hint: 'Bir rapor hazirlik gorevini planlar.',
+      prompt: [
+        'Gorev: Haftalik satis raporunu hazirla',
+        'Amac: cuma gunu paylasilacak ozeti hazir tutmak',
+        'Kisitlar: mevcut verilerle sinirli kal',
+        'Teslim: 2026-04-04 18:00',
+      ].join('\n'),
+    },
+    {
+      title: 'Fatura hatirlaticisi',
+      hint: 'Duzensiz unutulan odemeler icin kullan.',
+      prompt: [
+        'Gorev: Elektrik faturasini hatirlat',
+        'Amac: son odeme tarihini kacirmamak',
+        'Kisitlar: odeme tutari bilinmiyorsa bos birak',
+        'Teslim: 2026-04-05 17:00',
+      ].join('\n'),
+    },
+  ],
 }
 
 boot().catch(showError)
@@ -108,6 +177,7 @@ function bindEvents() {
   taskModeButton.addEventListener('click', () => toggleComposerMode('task'))
   desktopModeButton.addEventListener('click', () => toggleComposerMode('desktop'))
   attachmentStrip.addEventListener('click', onAttachmentStripClick)
+  composerExamples.addEventListener('click', onComposerExamplesClick)
   promptInput.addEventListener('input', resizeComposerInput)
   promptInput.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -285,7 +355,16 @@ function renderMemory(settings) {
           class="session-card ${session.sessionId === state.sessionId ? 'active' : ''}"
           data-session-id="${escapeHtml(session.sessionId)}"
         >
-          <div class="session-title">${escapeHtml(session.preview || 'Yeni sohbet')}</div>
+          <div class="session-card-head">
+            <div class="session-title">${escapeHtml(session.preview || 'Yeni sohbet')}</div>
+            <span
+              class="session-delete"
+              role="button"
+              tabindex="0"
+              aria-label="Sohbeti sil"
+              data-delete-session-id="${escapeHtml(session.sessionId)}"
+            >Sil</span>
+          </div>
           <div class="session-meta">${escapeHtml(formatTimestamp(session.updatedAt))}</div>
         </button>
       `).join('')
@@ -402,6 +481,38 @@ function appendMessage(role, rawContent, meta = {}, skipScroll = false) {
   if (!skipScroll) {
     scrollMessagesToBottom()
   }
+}
+
+function showThinkingMessage(label = 'modAI dusunuyor') {
+  clearThinkingMessage()
+
+  const emptyState = messages.querySelector('.empty-state')
+  if (emptyState) {
+    emptyState.remove()
+  }
+
+  const node = document.createElement('article')
+  node.className = 'message assistant pending'
+  node.innerHTML = `
+    <div class="message-head">
+      <div class="message-role">modAI</div>
+      <div class="message-time">${escapeHtml(formatClock(new Date().toISOString()))}</div>
+    </div>
+    <div class="thinking-row">
+      <span class="thinking-label">${escapeHtml(label)}</span>
+      <span class="thinking-dots" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </span>
+    </div>
+  `
+  messages.append(node)
+  state.thinkingNode = node
+  scrollMessagesToBottom()
+}
+
+function clearThinkingMessage() {
+  state.thinkingNode?.remove()
+  state.thinkingNode = null
 }
 
 function renderMessageMeta(meta) {
@@ -530,6 +641,7 @@ function renderComposerContext() {
   desktopModeButton.classList.toggle('active', state.composerMode === 'desktop')
   modeStatusBadge.textContent = MODE_LABELS[state.composerMode]
   updateComposerAffordances()
+  renderComposerExamples()
   renderAttachmentStrip()
 }
 
@@ -548,6 +660,34 @@ function updateComposerAffordances() {
 
   promptInput.placeholder = 'Mesajini yaz. Gorsel ekleyebilir, gorev plani baslatabilir veya bilgisayar kontrol moduna gecebilirsin.'
   sendButton.textContent = 'Send'
+}
+
+function renderComposerExamples() {
+  const examples = MODE_EXAMPLES[state.composerMode] ?? []
+  if (!examples.length) {
+    composerExamples.innerHTML = ''
+    composerExamples.classList.add('hidden')
+    return
+  }
+
+  composerExamples.classList.remove('hidden')
+  const label = state.composerMode === 'desktop' ? 'Hazir bilgisayar akislari' : 'Hazir gorev sablonlari'
+  composerExamples.innerHTML = `
+    <div class="composer-examples-label">${label}</div>
+    <div class="composer-examples-list">
+      ${examples.map((example, index) => `
+        <button
+          type="button"
+          class="example-chip"
+          data-example-mode="${escapeHtml(state.composerMode)}"
+          data-example-index="${index}"
+        >
+          <strong>${escapeHtml(example.title)}</strong>
+          <span>${escapeHtml(example.hint)}</span>
+        </button>
+      `).join('')}
+    </div>
+  `
 }
 
 function renderAttachmentStrip() {
@@ -645,6 +785,26 @@ function onAttachmentStripClick(event) {
 
   state.pendingAttachments.splice(index, 1)
   renderComposerContext()
+}
+
+function onComposerExamplesClick(event) {
+  const button = event.target.closest('[data-example-mode][data-example-index]')
+  if (!button) {
+    return
+  }
+
+  const mode = button.dataset.exampleMode
+  const index = Number(button.dataset.exampleIndex)
+  const example = MODE_EXAMPLES[mode]?.[index]
+  if (!example) {
+    return
+  }
+
+  state.composerMode = mode
+  promptInput.value = example.prompt
+  renderComposerContext()
+  resizeComposerInput()
+  promptInput.focus()
 }
 
 async function onSaveSettings() {
@@ -771,6 +931,7 @@ function onClear() {
   state.pendingPermissionRequest = null
   state.sessionId = null
   state.startedAt = new Date().toISOString()
+  clearThinkingMessage()
   closeApprovalModal()
   resetComposerContext()
   renderConversation()
@@ -831,6 +992,7 @@ function setBusy(isBusy, label) {
 
 function showError(error) {
   const message = error instanceof Error ? error.message : String(error)
+  clearThinkingMessage()
   appendMessage('assistant', `Error: ${message}`, {
     createdAt: new Date().toISOString(),
     error: true,
@@ -840,6 +1002,7 @@ function showError(error) {
 
 async function runChatRequest(request, approvals = {}) {
   setBusy(true, request.agent?.enabled ? 'Agent çalışıyor...' : 'Düşünüyor...')
+  showThinkingMessage(request.agent?.enabled ? 'Araçlari ve adimlari planliyor' : 'Yanit hazirlaniyor')
 
   try {
     const result = await fetchJson('/api/chat', {
@@ -869,6 +1032,7 @@ async function runChatRequest(request, approvals = {}) {
     state.startedAt = result.startedAt ?? state.startedAt
 
     if (result.stopReason === 'permission-required' && result.permissionRequest) {
+      clearThinkingMessage()
       state.pendingPermissionRequest = result.permissionRequest
       openApprovalModal(result.permissionRequest)
       await refreshMemoryData()
@@ -883,6 +1047,7 @@ async function runChatRequest(request, approvals = {}) {
       createdAt: new Date().toISOString(),
     }
 
+    clearThinkingMessage()
     state.history = [...request.messages, assistantMessage]
     state.pendingChatRequest = null
     state.pendingPermissionRequest = null
@@ -938,6 +1103,7 @@ function onApprovalDeny() {
   }
   state.pendingPermissionRequest = null
   state.pendingChatRequest = null
+  clearThinkingMessage()
   closeApprovalModal()
   setBusy(false, 'İzin reddedildi')
 }
@@ -973,6 +1139,36 @@ function setPermissionSelectValue(permissionKey, value) {
 }
 
 async function onSessionCardClick(event) {
+  const deleteButton = event.target.closest('[data-delete-session-id]')
+  if (deleteButton) {
+    const sessionId = deleteButton.dataset.deleteSessionId
+    if (!sessionId) {
+      return
+    }
+
+    const confirmed = window.confirm('Bu sohbet kaydini silmek istiyor musun?')
+    if (!confirmed) {
+      return
+    }
+
+    setBusy(true, 'Sohbet siliniyor...')
+    try {
+      await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+      })
+
+      if (state.sessionId === sessionId) {
+        onClear()
+      }
+
+      await refreshMemoryData()
+      setBusy(false, 'Sohbet silindi')
+    } catch (error) {
+      showError(error)
+    }
+    return
+  }
+
   const card = event.target.closest('[data-session-id]')
   if (!card) {
     return

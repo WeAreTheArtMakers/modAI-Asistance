@@ -27,3 +27,17 @@ test('createDesktopShortcut opens the application when only Chrome launch is req
   assert.equal(action.toolName, 'open')
   assert.deepEqual(action.input, { application: 'Google Chrome' })
 })
+
+test('createDesktopShortcut derives a YouTube search from structured desktop fields', () => {
+  const action = createDesktopShortcut([
+    'Bilgisayar kontrolu',
+    'Gorev: chrome ac ve YouTube ziyaret et',
+    'Amac: youtube video izleme',
+    'Kisitlar: yok',
+    'Tamamlanma Kriteri: baran gulesen videolari goster',
+  ].join('\n'))
+
+  assert.equal(action.toolName, 'open')
+  assert.equal(action.input.application, 'Google Chrome')
+  assert.match(action.input.target, /youtube\.com\/results\?search_query=baran%20gulesen/i)
+})
