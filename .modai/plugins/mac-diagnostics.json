@@ -1,0 +1,29 @@
+{
+  "id": "mac-diagnostics",
+  "name": "Mac Diagnostics",
+  "description": "Read-only macOS helper tools for quick machine inspection.",
+  "enabled": true,
+  "tools": [
+    {
+      "name": "battery_status",
+      "type": "shell",
+      "description": "Read the current battery and charging state.",
+      "command": "pmset -g batt",
+      "inputHint": "{}"
+    },
+    {
+      "name": "os_version",
+      "type": "shell",
+      "description": "Read the current macOS version and build.",
+      "command": "sw_vers",
+      "inputHint": "{}"
+    },
+    {
+      "name": "disk_root",
+      "type": "shell",
+      "description": "Read root volume disk usage.",
+      "command": "df -h /",
+      "inputHint": "{}"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+.DS_Store
+.cargo-home/
+node_modules/
+build-src/
+dist/
+src/
+.modai/*
+!.modai/skills/
+!.modai/skills/**
+!.modai/plugins/
+!.modai/plugins/**
+target/
+src-tauri/target/

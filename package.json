@@ -1,0 +1,28 @@
+{
+  "name": "modai-ultralight",
+  "version": "0.1.0",
+  "description": "Ultra-light modAI assistant for macOS Apple Silicon with pluggable model providers and zero npm runtime dependencies",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "modai": "./bin/modai"
+  },
+  "scripts": {
+    "start": "node modai/src/cli.mjs chat",
+    "chat": "node modai/src/cli.mjs chat",
+    "prompt": "node modai/src/cli.mjs prompt",
+    "web": "node modai/src/web/server.mjs",
+    "doctor": "node modai/src/cli.mjs doctor",
+    "models": "node modai/src/cli.mjs models",
+    "config:init": "node modai/src/cli.mjs config init",
+    "test": "node --test modai/test/*.test.mjs",
+    "build:mac:web": "node scripts/build-macos-app.mjs",
+    "package:mac:web": "node scripts/build-macos-app.mjs",
+    "build:mac": "node scripts/build-tauri-macos-app.mjs",
+    "package:mac": "node scripts/build-tauri-macos-app.mjs",
+    "cargo:check": "cargo check --manifest-path src-tauri/Cargo.toml"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
