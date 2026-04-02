@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>modAI</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <img class="brand-mark" src="/brand-mark.svg" alt="modAI logo" />
+          <div class="brand-copy">
+            <div class="eyebrow">modai assistant</div>
+            <h1>modAI</h1>
+          </div>
+        </div>
+
+        <button type="button" id="clearButton" class="primary full-width">Yeni Sohbet</button>
+
+        <section class="sidebar-section">
+          <div class="section-title">Sohbetler</div>
+          <div class="session-list" id="memorySessionsPanel"></div>
+        </section>
+
+        <div class="sidebar-footer">
+          <div class="sidebar-meta" id="connectionSummary">Model bekleniyor</div>
+          <div class="sidebar-meta" id="workspaceSummary">Workspace hazir</div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="chat-header">
+          <div class="chat-heading">
+            <div class="eyebrow">local-first chat</div>
+            <h2 id="chatTitle">Yeni sohbet</h2>
+            <div class="chat-subtitle" id="activeSessionMeta">Henüz mesaj yok</div>
+          </div>
+
+          <div class="chat-header-actions">
+            <select id="modelSelect" class="header-select"></select>
+            <button type="button" id="toggleActivityButton" class="secondary header-action">Aktivite</button>
+            <button type="button" id="toggleSettingsButton" class="secondary header-action">Ayarlar</button>
+            <div class="status" id="statusBox">Hazır</div>
+          </div>
+        </header>
+
+        <section class="messages-wrap">
+          <div class="messages" id="messages"></div>
+        </section>
+
+        <form class="composer" id="composer">
+          <div class="composer-toolbar">
+            <button type="button" id="attachImageButton" class="secondary quick-action">Görsel Ekle</button>
+            <button type="button" id="taskModeButton" class="secondary quick-action">Görev Ver</button>
+            <button type="button" id="desktopModeButton" class="secondary quick-action">Bilgisayarı Kullan</button>
+          </div>
+          <input id="imageInput" type="file" accept="image/*" multiple hidden />
+          <div class="attachment-strip" id="attachmentStrip"></div>
+          <textarea
+            id="promptInput"
+            placeholder="Mesajını yaz. Görsel ekleyebilir, görev planı başlatabilir veya bilgisayar kontrol moduna geçebilirsin."
+            rows="3"
+          ></textarea>
+          <div class="composer-footer">
+            <div class="composer-meta">
+              <div class="composer-badge" id="memorySessionBadge">Yeni session</div>
+              <div class="composer-badge subtle" id="modeStatusBadge">Standart sohbet</div>
+              <div class="composer-badge subtle" id="modelStatus">Model status</div>
+            </div>
+            <button type="submit" id="sendButton" class="primary">Send</button>
+          </div>
+        </form>
+      </main>
+
+      <aside class="settings-drawer hidden" id="settingsDrawer">
+        <div class="drawer-header">
+          <div>
+            <div class="eyebrow">controls</div>
+            <h3>Ayarlar ve Araçlar</h3>
+          </div>
+          <button type="button" id="closeSettingsButton" class="secondary">Kapat</button>
+        </div>
+
+        <div class="drawer-scroll">
+          <section class="drawer-section" id="activityShell">
+            <div class="activity-header">
+              <div>
+                <div class="section-title">Aktivite</div>
+                <div class="activity-summary" id="activitySummary">Arka plan aktivitesi yok</div>
+              </div>
+              <button type="button" id="activityHeaderButton" class="text-button">Aktivite</button>
+            </div>
+            <div class="activity-feed drawer-activity-feed" id="activityPanel"></div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Runtime</div>
+            <div class="field-grid">
+              <label class="field">
+                <span>Mode</span>
+                <select id="modeSelect">
+                  <option value="ultra">Ultra Light</option>
+                  <option value="pro">Pro</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Theme</span>
+                <select id="themeSelect">
+                  <option value="auto">Auto</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </label>
+              <label class="field inline-field">
+                <span>Agent mode</span>
+                <input type="checkbox" id="agentToggle" checked />
+              </label>
+              <label class="field">
+                <span>Agent steps</span>
+                <input id="agentSteps" type="number" min="1" max="12" value="6" />
+              </label>
+              <label class="field inline-field">
+                <span>Otomatik sablonlar</span>
+                <input type="checkbox" id="templateToggle" checked />
+              </label>
+              <label class="field inline-field">
+                <span>Gorev sablonu</span>
+                <input type="checkbox" id="taskTemplateToggle" checked />
+              </label>
+              <label class="field inline-field">
+                <span>Masaustu sablonu</span>
+                <input type="checkbox" id="desktopTemplateToggle" checked />
+              </label>
+              <label class="field">
+                <span>Gorev sablonu metni</span>
+                <textarea id="taskTemplateInput" rows="8"></textarea>
+              </label>
+              <label class="field">
+                <span>Bilgisayar sablonu metni</span>
+                <textarea id="desktopTemplateInput" rows="8"></textarea>
+              </label>
+            </div>
+            <div class="runtime-status" id="runtimeSummary">Runtime hazır</div>
+            <button type="button" id="saveSettingsButton" class="primary full-width">Ayarları Kaydet</button>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Providers</div>
+            <div class="provider-list" id="providersPanel"></div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Permissions</div>
+            <div class="list-grid" id="permissionsPanel"></div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Skills</div>
+            <div class="check-list" id="skillsPanel"></div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Plugins</div>
+            <div class="check-list" id="pluginsPanel"></div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Tools</div>
+            <div class="tool-list" id="toolsPanel"></div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Notes</div>
+            <div class="notes-list" id="memoryNotesPanel"></div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Planlanmis Gorevler</div>
+            <div class="notes-list" id="scheduledTasksPanel"></div>
+          </section>
+        </div>
+      </aside>
+
+      <div class="drawer-scrim hidden" id="drawerScrim"></div>
+    </div>
+
+    <div class="approval-overlay hidden" id="approvalOverlay">
+      <section class="approval-card">
+        <div class="section-title">Permission Request</div>
+        <h2 id="approvalTitle">Tool approval needed</h2>
+        <p id="approvalMessage"></p>
+        <pre id="approvalInput"></pre>
+        <div class="approval-actions">
+          <button type="button" id="approvalDenyButton" class="secondary">Deny</button>
+          <button type="button" id="approvalAllowOnceButton" class="primary">Allow Once</button>
+          <button type="button" id="approvalAllowAlwaysButton" class="primary">Always Allow</button>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

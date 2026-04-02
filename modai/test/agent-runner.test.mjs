@@ -91,3 +91,42 @@ test('AgentRunner stops and returns a permission request when a tool requires ap
   assert.equal(result.permissionRequest.toolName, 'mouse_click')
   assert.equal(result.events[1].type, 'permission-required')
 })
+
+test('AgentRunner retries once in desktop mode when the model narrates instead of using a tool', async () => {
+  const replies = [
+    'I will open Google Chrome for you now.',
+    '<tool_call>{"name":"open","input":{"target":"https://youtube.com","application":"Google Chrome"}}</tool_call>',
+    '<final>Tarayici acildi.</final>',
+  ]
+
+  const calls = []
+  const runner = new AgentRunner({
+    toolRegistry: {
+      list() {
+        return [{ name: 'open', description: 'Open a URL or app', inputHint: '{"target":"https://example.com"}' }]
+      },
+      async run(name, input) {
+        calls.push({ name, input })
+        return 'Opened'
+      },
+    },
+  })
+
+  const result = await runner.run({
+    provider: {
+      async chat() {
+        return { text: replies.shift() }
+      },
+    },
+    model: 'fake-model',
+    systemPrompt: 'You are modAI',
+    messages: [{ role: 'user', content: 'Chrome ac ve YouTube ara' }],
+    agent: { enabled: true, maxSteps: 4 },
+    context: { requestMode: 'desktop' },
+  })
+
+  assert.equal(result.text, 'Tarayici acildi.')
+  assert.equal(calls.length, 1)
+  assert.equal(result.events[0].type, 'protocol-error')
+  assert.equal(result.events[1].type, 'tool-call')
+})

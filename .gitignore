@@ -4,6 +4,10 @@ node_modules/
 build-src/
 dist/
 src/
+!modai/src/
+!modai/src/**
+!src-tauri/src/
+!src-tauri/src/**
 .modai/*
 !.modai/skills/
 !.modai/skills/**

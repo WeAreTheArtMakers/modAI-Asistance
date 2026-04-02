@@ -53,4 +53,21 @@ test('SessionStore persists sessions, message search, and notes in SQLite', asyn
   const recent = await sessionStore.listRecent(5)
   assert.equal(recent.length, 1)
   assert.match(recent[0].preview, /Composer/)
+
+  const task = await sessionStore.addScheduledTask({
+    sessionId,
+    mode: 'task',
+    title: 'Haftalik rapor',
+    goal: 'Raporu sabaha hazir tut',
+    constraints: 'Sadece mevcut dosyalar',
+    delivery: '2026-04-03 09:00',
+    body: 'Gorev: Haftalik rapor',
+    status: 'scheduled',
+    source: 'user',
+  })
+  assert.equal(task.title, 'Haftalik rapor')
+
+  const tasks = await sessionStore.listScheduledTasks(5)
+  assert.equal(tasks.length, 1)
+  assert.equal(tasks[0].delivery, '2026-04-03 09:00')
 })

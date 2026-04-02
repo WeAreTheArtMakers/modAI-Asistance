@@ -1,0 +1,84 @@
+import { AgentRunner } from './AgentRunner.mjs'
+import { ToolRegistry } from './ToolRegistry.mjs'
+import { createSystemPrompt } from '../prompts/systemPrompt.mjs'
+import { createBuiltinTools } from '../tools/builtinTools.mjs'
+import { createPluginTools } from '../services/PluginStore.mjs'
+import { buildSkillPrompt, filterActiveSkills } from '../services/SkillStore.mjs'
+
+export async function createRuntimeContext({
+  config,
+  configStore,
+  skillStore,
+  pluginStore,
+  modelRef,
+  platform = process.platform,
+}) {
+  const skills = skillStore ? await skillStore.list(config) : []
+  const plugins = pluginStore ? await pluginStore.list(config) : []
+  const activeSkills = filterActiveSkills(skills, config.skills?.active)
+  const activePlugins = filterActivePlugins(plugins, config.plugins?.active)
+  const tools = [
+    ...createBuiltinTools(),
+    ...createPluginTools(activePlugins),
+  ]
+  const toolRegistry = new ToolRegistry(tools)
+  const agentRunner = new AgentRunner({ toolRegistry })
+  const systemPrompt = composeSystemPrompt({
+    modelRef,
+    tools,
+    platform,
+    mode: config.mode?.active ?? 'pro',
+    activeSkills,
+    activePlugins,
+  })
+
+  return {
+    tools,
+    toolRegistry,
+    agentRunner,
+    skills,
+    activeSkills,
+    plugins,
+    activePlugins,
+    systemPrompt,
+    runtime: {
+      mode: config.mode?.active ?? 'pro',
+      permissions: config.permissions?.tools ?? {},
+      activeSkillIds: activeSkills.map(skill => skill.id),
+      activePluginIds: activePlugins.map(plugin => plugin.id),
+    },
+    configStore,
+  }
+}
+
+function composeSystemPrompt({ modelRef, tools, platform, mode, activeSkills, activePlugins }) {
+  const basePrompt = createSystemPrompt({
+    modelId: modelRef.id,
+    tools,
+    platform,
+  })
+
+  const pluginSection = activePlugins.length
+    ? [
+        'Loaded plugins:',
+        ...activePlugins.map(plugin => `- ${plugin.name}: ${plugin.description || 'plugin loaded'}`),
+      ].join('\n')
+    : ''
+  const skillSection = buildSkillPrompt(activeSkills, activeSkills.map(skill => skill.id))
+
+  return [
+    basePrompt,
+    `Current runtime mode: ${mode}.`,
+    pluginSection,
+    skillSection,
+  ].filter(Boolean).join('\n\n')
+}
+
+function filterActivePlugins(plugins, activePluginIds = []) {
+  if (!Array.isArray(activePluginIds) || activePluginIds.length === 0) {
+    return plugins.filter(plugin => plugin.enabled !== false)
+  }
+
+  const activeSet = new Set(activePluginIds)
+  return plugins.filter(plugin => activeSet.has(plugin.id) && plugin.enabled !== false)
+}
