@@ -170,6 +170,8 @@ function bindEvents() {
   approvalAllowOnceButton.addEventListener('click', () => handlePermissionApproval('once'))
   approvalAllowAlwaysButton.addEventListener('click', () => handlePermissionApproval('always'))
   memorySessionsPanel.addEventListener('click', onSessionCardClick)
+  providersPanel.addEventListener('click', onProviderPanelClick)
+  providersPanel.addEventListener('input', onProviderPanelInput)
   toggleSettingsButton.addEventListener('click', openSettingsDrawer)
   closeSettingsButton.addEventListener('click', closeSettingsDrawer)
   drawerScrim.addEventListener('click', closeSettingsDrawer)
@@ -240,6 +242,7 @@ function renderProviders(settings) {
     const node = document.createElement('article')
     node.className = `provider-card ${provider.available ? 'ok' : 'warn'}`
     const discoveredModels = (provider.discoveredModels ?? []).slice(0, 4).join(', ')
+    const supportsApiKey = Boolean(provider.apiKeyEnv)
     node.innerHTML = `
       <div class="provider-head">
         <strong>${escapeHtml(provider.id)}</strong>
@@ -248,6 +251,38 @@ function renderProviders(settings) {
       <div class="provider-meta">${escapeHtml(provider.type)}${provider.baseUrl ? ` · ${escapeHtml(provider.baseUrl)}` : ''}</div>
       <div class="provider-status">${escapeHtml(provider.availabilityMessage)}</div>
       <div class="provider-hint">${escapeHtml(provider.setupHint || '')}</div>
+      <div class="provider-config">
+        <label class="field compact-field">
+          <span>Base URL</span>
+          <input
+            type="text"
+            data-provider-base-url="${escapeHtml(provider.id)}"
+            value="${escapeHtml(provider.baseUrl || '')}"
+            placeholder="https://..."
+          />
+        </label>
+        ${supportsApiKey ? `
+          <label class="field compact-field">
+            <span>API key ${provider.hasStoredApiKey ? '· kayitli' : ''}</span>
+            <input
+              type="password"
+              data-provider-api-key="${escapeHtml(provider.id)}"
+              placeholder="${escapeHtml(provider.apiKeyEnv || 'API_KEY')}"
+              autocomplete="off"
+            />
+          </label>
+        ` : ''}
+      </div>
+      ${supportsApiKey ? `
+        <div class="provider-actions">
+          <button
+            type="button"
+            class="secondary provider-inline-button"
+            data-provider-clear-key="${escapeHtml(provider.id)}"
+          >Kayitli key'i temizle</button>
+          <span class="provider-inline-note">Bos birakirsan mevcut key korunur.</span>
+        </div>
+      ` : ''}
       ${discoveredModels ? `<div class="provider-models">${escapeHtml(discoveredModels)}</div>` : ''}
     `
     providersPanel.append(node)
@@ -952,6 +987,38 @@ function onClear() {
 }
 
 function collectSettingsPatch() {
+  const providerUpdates = {}
+  for (const input of providersPanel.querySelectorAll('[data-provider-base-url]')) {
+    const providerId = input.dataset.providerBaseUrl
+    if (!providerId) {
+      continue
+    }
+
+    providerUpdates[providerId] ??= {}
+    providerUpdates[providerId].baseUrl = input.value.trim()
+  }
+
+  for (const input of providersPanel.querySelectorAll('[data-provider-api-key]')) {
+    const providerId = input.dataset.providerApiKey
+    if (!providerId) {
+      continue
+    }
+
+    const apiKey = input.value.trim()
+    const clearApiKey = input.dataset.clearApiKey === 'true'
+    if (!apiKey && !clearApiKey) {
+      continue
+    }
+
+    providerUpdates[providerId] ??= {}
+    if (clearApiKey) {
+      providerUpdates[providerId].clearApiKey = true
+    }
+    if (apiKey) {
+      providerUpdates[providerId].apiKey = apiKey
+    }
+  }
+
   return {
     defaultModel: modelSelect.value,
     assistant: {
@@ -988,6 +1055,39 @@ function collectSettingsPatch() {
     plugins: {
       active: [...pluginsPanel.querySelectorAll('input[data-plugin-id]:checked')].map(node => node.dataset.pluginId),
     },
+    providers: providerUpdates,
+  }
+}
+
+function onProviderPanelClick(event) {
+  const clearButton = event.target.closest('[data-provider-clear-key]')
+  if (!clearButton) {
+    return
+  }
+
+  const providerId = clearButton.dataset.providerClearKey
+  const input = providersPanel.querySelector(`[data-provider-api-key="${cssEscape(providerId)}"]`)
+  if (!input) {
+    return
+  }
+
+  input.value = ''
+  input.dataset.clearApiKey = 'true'
+  clearButton.textContent = 'Key temizlenecek'
+}
+
+function onProviderPanelInput(event) {
+  const input = event.target.closest('[data-provider-api-key]')
+  if (!input) {
+    return
+  }
+
+  if (input.value.trim()) {
+    input.dataset.clearApiKey = 'false'
+    const clearButton = providersPanel.querySelector(`[data-provider-clear-key="${cssEscape(input.dataset.providerApiKey)}"]`)
+    if (clearButton) {
+      clearButton.textContent = "Kayitli key'i temizle"
+    }
   }
 }
 

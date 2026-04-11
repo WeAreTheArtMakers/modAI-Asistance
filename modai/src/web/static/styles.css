@@ -69,6 +69,7 @@ body {
 }
 
 body {
+  padding: 0.5rem;
   font-family: "SF Pro Display", "SF Pro Text", ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
   background:
     radial-gradient(circle at top left, rgba(134, 160, 255, 0.08), transparent 24rem),
@@ -92,16 +93,23 @@ button {
 }
 
 .shell {
+  position: relative;
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
-  height: 100vh;
+  height: calc(100vh - 1rem);
+  overflow: hidden;
+  border-radius: 1.1rem;
+  border: 1px solid var(--line);
+  background: rgba(13, 16, 22, 0.74);
+  box-shadow: var(--shadow);
 }
 
 .sidebar {
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   gap: 0.65rem;
-  height: 100vh;
+  min-height: 0;
+  height: 100%;
   padding: 0.75rem;
   background: linear-gradient(180deg, rgba(17, 21, 29, 0.96), rgba(17, 21, 29, 0.88));
   border-right: 1px solid var(--line);
@@ -313,8 +321,8 @@ button:disabled {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.4rem;
   min-width: 0;
-  min-height: 100vh;
-  height: 100vh;
+  min-height: 0;
+  height: 100%;
   padding: 0.75rem;
 }
 
@@ -712,11 +720,13 @@ textarea {
 }
 
 .settings-drawer {
-  position: fixed;
+  position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(388px, 92vw);
+  display: flex;
+  flex-direction: column;
+  width: min(400px, calc(100% - 2rem));
   border-radius: 0;
   border-left: 1px solid var(--line);
   z-index: 20;
@@ -736,7 +746,8 @@ textarea {
 }
 
 .drawer-scroll {
-  height: calc(100vh - 80px);
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 1rem;
 }
@@ -832,6 +843,34 @@ textarea {
   color: var(--warning);
 }
 
+.provider-config {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+}
+
+.compact-field span {
+  margin-bottom: 0.28rem;
+}
+
+.provider-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+}
+
+.provider-inline-button {
+  padding: 0.42rem 0.66rem;
+  font-size: 0.78rem;
+}
+
+.provider-inline-note {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 .note-head span {
   color: var(--muted);
   font-size: 0.78rem;
@@ -839,7 +878,7 @@ textarea {
 }
 
 .drawer-scrim {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.35);
   z-index: 10;
@@ -890,7 +929,7 @@ textarea {
 @media (max-width: 980px) {
   .shell {
     grid-template-columns: 1fr;
-    height: auto;
+    height: calc(100vh - 1rem);
   }
 
   .sidebar {

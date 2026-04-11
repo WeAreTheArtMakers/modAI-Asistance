@@ -421,6 +421,7 @@ function buildProviderState(alias, providerConfig, providerInsights) {
     type: providerConfig.type,
     baseUrl: providerConfig.baseUrl,
     apiKeyEnv: providerConfig.apiKeyEnv ?? '',
+    hasStoredApiKey: typeof providerConfig.apiKey === 'string' && providerConfig.apiKey.trim().length > 0,
     available,
     availabilityMessage,
     setupHint: buildProviderSetupHint(alias, providerConfig, availabilityMessage),
@@ -514,8 +515,12 @@ function buildDiscoveredModels(config, providerInsights, existingModels) {
 }
 
 function buildProviderSetupHint(alias, providerConfig, availabilityMessage) {
+  if (typeof providerConfig.apiKey === 'string' && providerConfig.apiKey.trim()) {
+    return 'API key uygulama icine kaydedildi. Istersen ayarlardan guncelleyebilirsin.'
+  }
+
   if (providerConfig.apiKeyEnv && availabilityMessage.includes(providerConfig.apiKeyEnv)) {
-    return `Launch modAI after exporting ${providerConfig.apiKeyEnv} for the app process.`
+    return `${providerConfig.apiKeyEnv} eksik. API key'i asagidan kaydedebilir veya ortam degiskeniyle gecirebilirsin.`
   }
 
   if (providerConfig.type === 'ollama') {
@@ -564,6 +569,24 @@ function applySettingsPatch(config, patch = {}) {
 
   if (patch.theme?.active && ['auto', 'light', 'dark'].includes(patch.theme.active)) {
     config.theme.active = patch.theme.active
+  }
+
+  if (patch.providers && typeof patch.providers === 'object') {
+    for (const [alias, update] of Object.entries(patch.providers)) {
+      if (!config.providers[alias] || !update || typeof update !== 'object') {
+        continue
+      }
+
+      if (typeof update.baseUrl === 'string' && update.baseUrl.trim()) {
+        config.providers[alias].baseUrl = update.baseUrl.trim()
+      }
+
+      if (update.clearApiKey === true) {
+        delete config.providers[alias].apiKey
+      } else if (typeof update.apiKey === 'string' && update.apiKey.trim()) {
+        config.providers[alias].apiKey = update.apiKey.trim()
+      }
+    }
   }
 
   if (patch.agent && typeof patch.agent === 'object') {

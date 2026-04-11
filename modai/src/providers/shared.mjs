@@ -5,6 +5,11 @@ export function normalizeBaseUrl(url) {
 }
 
 export function resolveApiKey(providerConfig) {
+  const stored = typeof providerConfig.apiKey === 'string' ? providerConfig.apiKey.trim() : ''
+  if (stored) {
+    return stored
+  }
+
   if (!providerConfig.apiKeyEnv) {
     return null
   }
