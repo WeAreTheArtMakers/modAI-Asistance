@@ -1,10 +1,12 @@
-export function createSystemPrompt({ modelId, tools, platform }) {
+import { createBusinessCopilotPrompt } from './businessCopilotPrompt.mjs'
+
+export function createSystemPrompt({ modelId, tools, platform, assistantProfile = 'business-copilot' }) {
   const toolList = tools.map(tool => {
     const usage = tool.inputHint ? ` | input: ${tool.inputHint}` : ''
     return `- ${tool.name}: ${tool.description}${usage}`
   }).join('\n')
 
-  return [
+  const basePrompt = [
     `You are modAI, a local-first assistant running on ${platform}.`,
     `Current model routing: ${modelId}.`,
     'Favor precise, concise answers.',
@@ -14,4 +16,13 @@ export function createSystemPrompt({ modelId, tools, platform }) {
     'Available local tools:',
     toolList,
   ].join('\n')
+
+  if (assistantProfile === 'business-copilot') {
+    return [
+      basePrompt,
+      createBusinessCopilotPrompt(),
+    ].join('\n\n')
+  }
+
+  return basePrompt
 }

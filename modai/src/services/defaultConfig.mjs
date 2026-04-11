@@ -1,7 +1,10 @@
 export function createDefaultConfig() {
   return {
-    version: 6,
+    version: 7,
     defaultModel: 'ollama:llama3.2',
+    assistant: {
+      profile: 'business-copilot',
+    },
     mode: {
       active: 'pro',
     },
@@ -111,6 +114,10 @@ export function mergeConfigWithDefaults(config = {}) {
   const merged = {
     ...defaults,
     ...config,
+    assistant: {
+      ...defaults.assistant,
+      ...(config.assistant ?? {}),
+    },
     mode: {
       ...defaults.mode,
       ...(config.mode ?? {}),
@@ -242,5 +249,9 @@ function applyLegacyUpgrades(rawConfig, mergedConfig) {
 
   if (previousVersion < 6 && mergedConfig.permissions?.tools?.open === 'ask') {
     mergedConfig.permissions.tools.open = 'allow'
+  }
+
+  if (previousVersion < 7 && !rawConfig?.assistant?.profile) {
+    mergedConfig.assistant.profile = 'business-copilot'
   }
 }

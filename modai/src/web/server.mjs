@@ -363,6 +363,9 @@ async function buildClientState(config) {
   ])
   return {
     defaultModel: preferredDefaultModel,
+    assistant: {
+      profile: config.assistant?.profile ?? 'business-copilot',
+    },
     mode: config.mode,
     theme: config.theme,
     agent: {
@@ -553,6 +556,10 @@ function applySettingsPatch(config, patch = {}) {
 
   if (patch.mode?.active && ['ultra', 'pro'].includes(patch.mode.active)) {
     config.mode.active = patch.mode.active
+  }
+
+  if (patch.assistant?.profile && ['general', 'business-copilot'].includes(patch.assistant.profile)) {
+    config.assistant.profile = patch.assistant.profile
   }
 
   if (patch.theme?.active && ['auto', 'light', 'dark'].includes(patch.theme.active)) {

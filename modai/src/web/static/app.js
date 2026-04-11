@@ -1,8 +1,10 @@
 const modeSelect = document.getElementById('modeSelect')
+const assistantProfileSelect = document.getElementById('assistantProfileSelect')
 const themeSelect = document.getElementById('themeSelect')
 const modelSelect = document.getElementById('modelSelect')
 const modelStatus = document.getElementById('modelStatus')
 const modeStatusBadge = document.getElementById('modeStatusBadge')
+const assistantProfileBadge = document.getElementById('assistantProfileBadge')
 const runtimeSummary = document.getElementById('runtimeSummary')
 const providersPanel = document.getElementById('providersPanel')
 const agentToggle = document.getElementById('agentToggle')
@@ -157,6 +159,7 @@ function bindEvents() {
   clearButton.addEventListener('click', onClear)
   modelSelect.addEventListener('change', updateModelStatus)
   modeSelect.addEventListener('change', updateModelStatus)
+  assistantProfileSelect.addEventListener('change', renderAssistantProfileBadges)
   themeSelect.addEventListener('change', () => applyTheme(themeSelect.value))
   agentToggle.addEventListener('change', updateModelStatus)
   agentSteps.addEventListener('input', updateModelStatus)
@@ -195,6 +198,7 @@ async function refreshSettings() {
 
 function renderSettings(settings) {
   modeSelect.value = settings.mode?.active ?? 'pro'
+  assistantProfileSelect.value = settings.assistant?.profile ?? 'business-copilot'
   const theme = settings.theme?.active ?? 'auto'
   themeSelect.value = theme
   applyTheme(theme)
@@ -207,6 +211,7 @@ function renderSettings(settings) {
   renderPlugins(settings)
   renderTools(settings)
   renderMemory(settings)
+  renderAssistantProfileBadges()
   updateModelStatus()
   updateSessionIndicators()
   renderComposerContext()
@@ -410,7 +415,7 @@ function updateModelStatus() {
   const readiness = current.available ? 'hazır' : 'kullanılamıyor'
   modelStatus.textContent = `${current.id} ${readiness}`
   runtimeSummary.textContent = current.available
-    ? `${modeSelect.value.toUpperCase()} · ${agentToggle.checked ? `agent ${normalizeSteps(agentSteps.value)} step` : 'agent kapalı'}`
+    ? `${formatAssistantProfileLabel(assistantProfileSelect.value)} · ${modeSelect.value.toUpperCase()} · ${agentToggle.checked ? `agent ${normalizeSteps(agentSteps.value)} step` : 'agent kapalı'}`
     : current.availabilityMessage
   connectionSummary.textContent = `${current.id} · ${current.available ? 'online' : 'setup gerekli'}`
   sendButton.disabled = !current.available
@@ -432,6 +437,10 @@ function updateSessionIndicators() {
     : 'Workspace hazır'
 }
 
+function renderAssistantProfileBadges() {
+  assistantProfileBadge.textContent = formatAssistantProfileLabel(assistantProfileSelect.value)
+}
+
 function renderConversation() {
   messages.innerHTML = ''
 
@@ -439,8 +448,10 @@ function renderConversation() {
     messages.innerHTML = `
       <section class="empty-state">
         <div class="eyebrow">modAI</div>
-        <h3>Profesyonel ve sade sohbet görünümü hazır.</h3>
-        <p>Eski sohbetler solda kalır. Chat altında görsel ekleme, görev verme ve bilgisayar kontrolü için hızlı aksiyonlar bulunur. Tool aktivitesi ayrı panelde tutulur.</p>
+        <h3>${assistantProfileSelect.value === 'business-copilot' ? 'Business Development Copilot hazir.' : 'Profesyonel ve sade sohbet görünümü hazır.'}</h3>
+        <p>${assistantProfileSelect.value === 'business-copilot'
+          ? 'Gelir artisi, maliyet azaltma, operasyon ve buyume odakli analiz icin bir is turu veya hedef yaz. Copilot sektor ve olgunluk seviyesini infer ederek calisir.'
+          : 'Eski sohbetler solda kalir. Chat altinda gorsel ekleme, gorev verme ve bilgisayar kontrolu icin hizli aksiyonlar bulunur. Tool aktivitesi ayri panelde tutulur.'}</p>
       </section>
     `
     return
@@ -943,6 +954,9 @@ function onClear() {
 function collectSettingsPatch() {
   return {
     defaultModel: modelSelect.value,
+    assistant: {
+      profile: assistantProfileSelect.value,
+    },
     mode: {
       active: modeSelect.value,
     },
@@ -1375,6 +1389,10 @@ function summarizeTitle(value) {
     return 'Yeni sohbet'
   }
   return text.length <= 42 ? text : `${text.slice(0, 42)}…`
+}
+
+function formatAssistantProfileLabel(value) {
+  return value === 'business-copilot' ? 'Business copilot' : 'General assistant'
 }
 
 function normalizeSteps(value) {

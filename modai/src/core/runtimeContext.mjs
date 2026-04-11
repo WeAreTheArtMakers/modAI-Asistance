@@ -28,6 +28,7 @@ export async function createRuntimeContext({
     tools,
     platform,
     mode: config.mode?.active ?? 'pro',
+    assistantProfile: config.assistant?.profile ?? 'business-copilot',
     activeSkills,
     activePlugins,
   })
@@ -51,11 +52,12 @@ export async function createRuntimeContext({
   }
 }
 
-function composeSystemPrompt({ modelRef, tools, platform, mode, activeSkills, activePlugins }) {
+function composeSystemPrompt({ modelRef, tools, platform, mode, assistantProfile, activeSkills, activePlugins }) {
   const basePrompt = createSystemPrompt({
     modelId: modelRef.id,
     tools,
     platform,
+    assistantProfile,
   })
 
   const pluginSection = activePlugins.length
@@ -68,6 +70,7 @@ function composeSystemPrompt({ modelRef, tools, platform, mode, activeSkills, ac
 
   return [
     basePrompt,
+    `Active assistant profile: ${assistantProfile}.`,
     `Current runtime mode: ${mode}.`,
     pluginSection,
     skillSection,
