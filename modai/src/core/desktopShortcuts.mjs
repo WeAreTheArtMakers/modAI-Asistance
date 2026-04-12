@@ -18,8 +18,20 @@ export function createDesktopShortcut(content) {
   ].filter(Boolean).join('\n')
 
   const chromeRequested = /\b(?:chrome|chorme|google chrome)\b/i.test(text)
-  const youtubeQuery = extractSearchQuery(structuredIntent, 'youtube')
-    || deriveYoutubeQueryFromFields(fields)
+  const finderShortcut = createFinderShortcut(structuredIntent)
+  if (finderShortcut) {
+    return finderShortcut
+  }
+
+  const screenshotShortcut = createScreenshotShortcut(structuredIntent)
+  if (screenshotShortcut) {
+    return screenshotShortcut
+  }
+
+  const youtubeIntent = /\byoutube\b/i.test(structuredIntent)
+  const youtubeQuery = youtubeIntent
+    ? extractSearchQuery(structuredIntent, 'youtube') || deriveYoutubeQueryFromFields(fields)
+    : ''
   if (youtubeQuery) {
     return {
       toolName: 'open',
@@ -176,9 +188,9 @@ function normalizeFieldKey(value) {
 
 function deriveYoutubeQueryFromFields(fields) {
   const candidates = [
-    fields.tamamlanmaKriteri,
     fields.amac,
     fields.gorev,
+    fields.tamamlanmaKriteri,
   ].filter(Boolean)
 
   for (const candidate of candidates) {
@@ -186,7 +198,7 @@ function deriveYoutubeQueryFromFields(fields) {
       candidate
         .replace(/\byoutube\b/gi, '')
         .replace(/\b(?:video(?:lari|ları|lari)?|videolarini|sonuclari|sonuçlari)\b/gi, '')
-        .replace(/\b(?:goster|göster|gelsin|gorunuyor|görünüyor|ac|aç|ziyaret et|izle|ara|search)\b/gi, '')
+        .replace(/\b(?:goster|göster|gelsin|gorunuyor|görünüyor|ac|aç|ziyaret et|izle|ara|arama|search|bul|bulmak|bulun)\b/gi, '')
         .replace(/\b(?:olsun|gibi|icin|için)\b/gi, ''),
     )
 
@@ -196,4 +208,48 @@ function deriveYoutubeQueryFromFields(fields) {
   }
 
   return ''
+}
+
+function createFinderShortcut(text) {
+  if (!/\bfinder\b/i.test(text) && !/\bdownloads?\b/i.test(text)) {
+    return null
+  }
+
+  if (!/\b(?:ac|aç|open|goster|göster|ziyaret et)\b/i.test(text)) {
+    return null
+  }
+
+  const home = process.env.HOME || ''
+  const target = /\bdownloads?\b/i.test(text) && home
+    ? `${home}/Downloads`
+    : home || '.'
+
+  return {
+    toolName: 'open',
+    input: {
+      target,
+      application: 'Finder',
+    },
+    successMessage: target.endsWith('/Downloads')
+      ? 'Finder Downloads klasorunu acti.'
+      : 'Finder acildi.',
+  }
+}
+
+function createScreenshotShortcut(text) {
+  if (!/\b(?:screenshot|screen\s*capture|ekran goruntusu|ekran görüntüsü|ekrani yakala|ekranı yakala)\b/i.test(text)) {
+    return null
+  }
+
+  const home = process.env.HOME || ''
+  const fileName = `modAI-screenshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`
+  const targetPath = home ? `${home}/Desktop/${fileName}` : fileName
+
+  return {
+    toolName: 'screenshot',
+    input: {
+      path: targetPath,
+    },
+    successMessage: `Ekran goruntusu kaydedildi: ${targetPath}`,
+  }
 }

@@ -90,7 +90,7 @@ const MODE_EXAMPLES = {
         'Gorev: Google Chrome ac ve YouTube ziyaret et',
         'Amac: Baran Gulesen videolarini bulmak',
         'Kisitlar: Yalnizca Google Chrome kullan, yeni bir sekmede ac',
-        'Tamamlanma Kriteri: Baran Gulesen YouTube arama sonuclari gorunuyor',
+        'Tamamlanma Kriteri: YouTube sonuc sayfasi gorunuyor',
       ].join('\n'),
     },
     {
@@ -122,7 +122,7 @@ const MODE_EXAMPLES = {
         'Gorev: Sabah toplantisini hatirlat',
         'Amac: yarin 09:00 toplantisini kacirmamak',
         'Kisitlar: kisa ve net olsun',
-        'Teslim: 2026-04-03 09:00',
+        `Teslim: ${formatDateTimeOffset(1, 9, 0)}`,
       ].join('\n'),
     },
     {
@@ -132,7 +132,7 @@ const MODE_EXAMPLES = {
         'Gorev: Haftalik satis raporunu hazirla',
         'Amac: cuma gunu paylasilacak ozeti hazir tutmak',
         'Kisitlar: mevcut verilerle sinirli kal',
-        'Teslim: 2026-04-04 18:00',
+        `Teslim: ${formatNextWeekdayDateTime(5, 18, 0)}`,
       ].join('\n'),
     },
     {
@@ -142,7 +142,7 @@ const MODE_EXAMPLES = {
         'Gorev: Elektrik faturasini hatirlat',
         'Amac: son odeme tarihini kacirmamak',
         'Kisitlar: odeme tutari bilinmiyorsa bos birak',
-        'Teslim: 2026-04-05 17:00',
+        `Teslim: ${formatDateTimeOffset(3, 17, 0)}`,
       ].join('\n'),
     },
   ],
@@ -1742,6 +1742,31 @@ function getDefaultProviderTab(settings) {
     return 'local'
   }
   return 'local'
+}
+
+function formatDateTimeOffset(days, hour, minute = 0) {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  date.setHours(hour, minute, 0, 0)
+  return formatDateTimeForTask(date)
+}
+
+function formatNextWeekdayDateTime(weekday, hour, minute = 0) {
+  const date = new Date()
+  const currentDay = date.getDay()
+  const offset = (weekday - currentDay + 7) % 7 || 7
+  date.setDate(date.getDate() + offset)
+  date.setHours(hour, minute, 0, 0)
+  return formatDateTimeForTask(date)
+}
+
+function formatDateTimeForTask(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
 function findLastUserMessage(items) {

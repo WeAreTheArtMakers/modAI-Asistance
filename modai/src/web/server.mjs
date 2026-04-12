@@ -157,11 +157,44 @@ const server = createServer(async (request, response) => {
         requestId: request.headers['x-request-id'] || '',
       }
 
+      let savedTask = null
       if (taskDraft) {
-        await sessionStore.addScheduledTask({
+        savedTask = await sessionStore.addScheduledTask({
           sessionId,
           mode: interactionMode,
           ...taskDraft,
+        })
+      }
+
+      if (interactionMode === 'task' && savedTask) {
+        const text = buildTaskSavedMessage(savedTask)
+        const persistedMessages = [
+          ...inputMessages,
+          {
+            role: 'assistant',
+            content: text,
+            createdAt: new Date().toISOString(),
+          },
+        ]
+
+        await sessionStore.save({
+          sessionId,
+          modelId: modelRef.id,
+          agentEnabled: false,
+          agentMaxSteps: 0,
+          startedAt,
+          messages: persistedMessages,
+        })
+
+        return sendJson(response, 200, {
+          text,
+          model: modelRef.id,
+          sessionId,
+          startedAt,
+          steps: 0,
+          stopReason: 'task-saved',
+          events: [],
+          permissionRequest: null,
         })
       }
 
@@ -714,7 +747,7 @@ function normalizeTaskDraft(taskDraft, interactionMode) {
   const title = String(taskDraft.title ?? '').trim()
   const goal = String(taskDraft.goal ?? '').trim()
   const constraints = String(taskDraft.constraints ?? '').trim()
-  const delivery = String(taskDraft.delivery ?? '').trim()
+  const delivery = normalizeDeliveryInput(taskDraft.delivery)
   const body = String(taskDraft.body ?? '').trim()
   if (!title && !goal && !delivery) {
     return null
@@ -730,6 +763,71 @@ function normalizeTaskDraft(taskDraft, interactionMode) {
     status: delivery ? 'scheduled' : 'draft',
     source: 'user',
   }
+}
+
+function buildTaskSavedMessage(task) {
+  const lines = [
+    `Görev kaydedildi: ${task.title}`,
+  ]
+
+  if (task.goal) {
+    lines.push(`Amaç: ${task.goal}`)
+  }
+
+  if (task.delivery) {
+    lines.push(`Teslim: ${task.delivery}`)
+    if (isPastDelivery(task.delivery)) {
+      lines.push('Not: Bu teslim tarihi geçmiş görünüyor. Tarihi güncellemek istersen görevi yeniden oluştur.')
+    }
+  } else {
+    lines.push('Teslim: tarih belirtilmedi, görev taslak olarak saklandı.')
+  }
+
+  lines.push('Kayıt modAI içindeki Planlanmış Görevler bölümüne eklendi. macOS Hatırlatıcılar uygulamasına otomatik yazma bu akışta zorunlu değil.')
+  return lines.join('\n')
+}
+
+function normalizeDeliveryInput(value) {
+  const text = String(value ?? '').trim()
+  if (!text) {
+    return ''
+  }
+
+  const relativeMatch = text.match(/\b(bugun|bugün|yarin|yarın)\b(?:[^\d]*(\d{1,2})(?::|\.)(\d{2}))?/i)
+  if (!relativeMatch) {
+    return text
+  }
+
+  const date = new Date()
+  const label = relativeMatch[1].toLowerCase()
+  if (label === 'yarin' || label === 'yarın') {
+    date.setDate(date.getDate() + 1)
+  }
+
+  const hour = Number(relativeMatch[2] ?? 9)
+  const minute = Number(relativeMatch[3] ?? 0)
+  date.setHours(Number.isFinite(hour) ? hour : 9, Number.isFinite(minute) ? minute : 0, 0, 0)
+  return formatLocalDateTime(date)
+}
+
+function isPastDelivery(value) {
+  const parsed = parseDeliveryDate(value)
+  return Boolean(parsed && parsed.getTime() < Date.now())
+}
+
+function parseDeliveryDate(value) {
+  const normalized = String(value ?? '').trim().replace(' ', 'T')
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatLocalDateTime(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
 async function saveUpload(body = {}) {
