@@ -4,9 +4,11 @@ import { stdin as input, stdout as output } from 'node:process'
 import { AppState } from './AppState.mjs'
 import { createRuntimeContext } from './runtimeContext.mjs'
 import { ConfigStore } from '../services/ConfigStore.mjs'
+import { KeychainStore } from '../services/KeychainStore.mjs'
 import { SessionStore } from '../services/SessionStore.mjs'
 import { SkillStore } from '../services/SkillStore.mjs'
 import { PluginStore } from '../services/PluginStore.mjs'
+import { prepareRuntimeConfig, stripInlineProviderSecrets } from '../services/providerSecrets.mjs'
 import { createDefaultProviderRegistry } from './ProviderRegistry.mjs'
 import { summarizeToolEvent } from './agentProtocol.mjs'
 import { formatStatus, header, printKeyValueTable, renderBanner } from '../utils/terminal.mjs'
@@ -16,6 +18,7 @@ import { safeJson } from '../utils/json.mjs'
 export class ModAIApp {
   constructor(options = {}) {
     this.configStore = options.configStore ?? new ConfigStore()
+    this.keychainStore = options.keychainStore ?? new KeychainStore()
     this.sessionStore = options.sessionStore ?? new SessionStore(this.configStore)
     this.skillStore = options.skillStore ?? new SkillStore(this.configStore)
     this.pluginStore = options.pluginStore ?? new PluginStore(this.configStore)
@@ -47,7 +50,7 @@ export class ModAIApp {
   }
 
   async runChat(argv) {
-    const config = await this.configStore.load()
+    const config = await this.loadRuntimeConfig()
     const flags = parseFlags(argv)
     const requestedModel = readFlag(flags, 'm', 'model')
     const agentDefaults = this.resolveAgentSettings({
@@ -140,7 +143,7 @@ export class ModAIApp {
   }
 
   async runPrompt(argv) {
-    const config = await this.configStore.load()
+    const config = await this.loadRuntimeConfig()
     const flags = parseFlags(argv)
     const requestedModel = readFlag(flags, 'm', 'model')
     const prompt = flags.positionals.join(' ').trim()
@@ -190,7 +193,7 @@ export class ModAIApp {
   }
 
   async runDoctor() {
-    const config = await this.configStore.load()
+    const config = await this.loadRuntimeConfig()
     const configPath = this.configStore.getConfigPath()
     const defaultModel = await this.resolvePreferredModel(config)
     const runtimeContext = await this.createRuntime(config, defaultModel)
@@ -224,7 +227,7 @@ export class ModAIApp {
   }
 
   async runModels(argv) {
-    const config = await this.configStore.load()
+    const config = await this.loadRuntimeConfig()
     const flags = parseFlags(argv)
     const discover = flags.booleans.has('discover')
     const rows = []
@@ -306,7 +309,7 @@ export class ModAIApp {
           throw new Error('Usage: /mode <ultra|pro>')
         }
         context.config.mode.active = nextMode
-        await this.configStore.save(context.config)
+        await this.saveConfig(context.config)
         console.log(`Mode changed to ${nextMode}`)
         return 'refresh-runtime'
       }
@@ -323,7 +326,7 @@ export class ModAIApp {
           throw new Error('Usage: /permit <tool> <allow|ask|deny>')
         }
         context.config.permissions.tools[toolName] = permission
-        await this.configStore.save(context.config)
+        await this.saveConfig(context.config)
         console.log(`Permission for ${toolName}: ${permission}`)
         return 'refresh-runtime'
       }
@@ -345,7 +348,7 @@ export class ModAIApp {
           }
           context.config.agent.enabled = true
           context.config.agent.maxSteps = context.state.agentMaxSteps
-          await this.configStore.save(context.config)
+          await this.saveConfig(context.config)
           console.log(`Agent mode on · max ${context.state.agentMaxSteps} step(s)`)
           return 'handled'
         }
@@ -354,7 +357,7 @@ export class ModAIApp {
           context.state.setAgentEnabled(false)
           context.config.agent.enabled = false
           context.config.agent.maxSteps = context.state.agentMaxSteps
-          await this.configStore.save(context.config)
+          await this.saveConfig(context.config)
           console.log('Agent mode off')
           return 'handled'
         }
@@ -363,7 +366,7 @@ export class ModAIApp {
           context.state.setAgentMaxSteps(rest[1])
           context.config.agent.enabled = context.state.agentEnabled
           context.config.agent.maxSteps = context.state.agentMaxSteps
-          await this.configStore.save(context.config)
+          await this.saveConfig(context.config)
           console.log(`Agent max steps set to ${context.state.agentMaxSteps}`)
           return 'handled'
         }
@@ -385,7 +388,7 @@ export class ModAIApp {
         }
         const modelRef = this.resolveModel(context.config, nextModelId)
         context.config.defaultModel = modelRef.id
-        await this.configStore.save(context.config)
+        await this.saveConfig(context.config)
         context.state.setModel(modelRef.id)
         console.log(`Active model changed to ${modelRef.id}`)
         return 'provider-changed'
@@ -626,6 +629,22 @@ export class ModAIApp {
       provider: context.provider,
     }
     return context.runtimeContext.toolRegistry.run(name, inputValue, nextContext)
+  }
+
+  async loadRuntimeConfig() {
+    const config = await this.configStore.load()
+    return prepareRuntimeConfig(config, {
+      configStore: this.configStore,
+      keychainStore: this.keychainStore,
+    })
+  }
+
+  async saveConfig(config) {
+    const next = structuredClone(config)
+    if (this.keychainStore.isAvailable()) {
+      stripInlineProviderSecrets(next)
+    }
+    await this.configStore.save(next)
   }
 
   printHelp() {

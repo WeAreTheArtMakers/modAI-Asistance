@@ -7,6 +7,8 @@ const modeStatusBadge = document.getElementById('modeStatusBadge')
 const assistantProfileBadge = document.getElementById('assistantProfileBadge')
 const runtimeSummary = document.getElementById('runtimeSummary')
 const providersPanel = document.getElementById('providersPanel')
+const providerTabList = document.getElementById('providerTabList')
+const providersSection = document.getElementById('providersSection')
 const agentToggle = document.getElementById('agentToggle')
 const agentSteps = document.getElementById('agentSteps')
 const templateToggle = document.getElementById('templateToggle')
@@ -19,6 +21,7 @@ const skillsPanel = document.getElementById('skillsPanel')
 const pluginsPanel = document.getElementById('pluginsPanel')
 const toolsPanel = document.getElementById('toolsPanel')
 const memorySessionsPanel = document.getElementById('memorySessionsPanel')
+const drawerSessionsPanel = document.getElementById('drawerSessionsPanel')
 const memoryNotesPanel = document.getElementById('memoryNotesPanel')
 const scheduledTasksPanel = document.getElementById('scheduledTasksPanel')
 const saveSettingsButton = document.getElementById('saveSettingsButton')
@@ -42,6 +45,7 @@ const workspaceSummary = document.getElementById('workspaceSummary')
 const chatTitle = document.getElementById('chatTitle')
 const toggleSettingsButton = document.getElementById('toggleSettingsButton')
 const closeSettingsButton = document.getElementById('closeSettingsButton')
+const drawerNewChatButton = document.getElementById('drawerNewChatButton')
 const settingsDrawer = document.getElementById('settingsDrawer')
 const drawerScrim = document.getElementById('drawerScrim')
 const activityShell = document.getElementById('activityShell')
@@ -67,6 +71,8 @@ const state = {
   composerMode: 'chat',
   pendingAttachments: [],
   thinkingNode: null,
+  providerTab: 'local',
+  providerDrafts: {},
 }
 
 const MODE_LABELS = {
@@ -170,10 +176,13 @@ function bindEvents() {
   approvalAllowOnceButton.addEventListener('click', () => handlePermissionApproval('once'))
   approvalAllowAlwaysButton.addEventListener('click', () => handlePermissionApproval('always'))
   memorySessionsPanel.addEventListener('click', onSessionCardClick)
+  drawerSessionsPanel.addEventListener('click', onSessionCardClick)
   providersPanel.addEventListener('click', onProviderPanelClick)
   providersPanel.addEventListener('input', onProviderPanelInput)
+  providerTabList.addEventListener('click', onProviderTabClick)
   toggleSettingsButton.addEventListener('click', openSettingsDrawer)
   closeSettingsButton.addEventListener('click', closeSettingsDrawer)
+  drawerNewChatButton.addEventListener('click', onClear)
   drawerScrim.addEventListener('click', closeSettingsDrawer)
   toggleActivityButton.addEventListener('click', openActivityDrawer)
   activityHeaderButton.addEventListener('click', openActivityDrawer)
@@ -183,6 +192,7 @@ function bindEvents() {
   desktopModeButton.addEventListener('click', () => toggleComposerMode('desktop'))
   attachmentStrip.addEventListener('click', onAttachmentStripClick)
   composerExamples.addEventListener('click', onComposerExamplesClick)
+  messages.addEventListener('click', onMessageAreaClick)
   promptInput.addEventListener('input', resizeComposerInput)
   promptInput.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -199,6 +209,10 @@ async function refreshSettings() {
 }
 
 function renderSettings(settings) {
+  if (!state.providerTab || !isValidProviderTab(state.providerTab)) {
+    state.providerTab = getDefaultProviderTab(settings)
+  }
+  state.providerDrafts = createProviderDrafts(settings.providers ?? [])
   modeSelect.value = settings.mode?.active ?? 'pro'
   assistantProfileSelect.value = settings.assistant?.profile ?? 'business-copilot'
   const theme = settings.theme?.active ?? 'auto'
@@ -237,13 +251,44 @@ function renderModels(settings) {
 }
 
 function renderProviders(settings) {
-  providersPanel.innerHTML = ''
-  for (const provider of settings.providers ?? []) {
-    const node = document.createElement('article')
-    node.className = `provider-card ${provider.available ? 'ok' : 'warn'}`
-    const discoveredModels = (provider.discoveredModels ?? []).slice(0, 4).join(', ')
-    const supportsApiKey = Boolean(provider.apiKeyEnv)
-    node.innerHTML = `
+  renderProviderTabs()
+
+  const providers = settings.providers ?? []
+  if (state.providerTab === 'advanced') {
+    providersPanel.innerHTML = renderAdvancedProviderPanel(providers)
+    return
+  }
+
+  const visibleProviders = providers.filter(provider => provider.group === state.providerTab)
+  providersPanel.innerHTML = visibleProviders.length
+    ? visibleProviders.map(renderProviderCardMarkup).join('')
+    : '<div class="empty-card">Bu sekmede goruntulenecek provider yok.</div>'
+}
+
+function renderProviderTabs() {
+  for (const button of providerTabList.querySelectorAll('[data-provider-tab]')) {
+    button.classList.toggle('is-active', button.dataset.providerTab === state.providerTab)
+  }
+}
+
+function renderProviderCardMarkup(provider) {
+  const discoveredModels = (provider.discoveredModels ?? []).slice(0, 4).join(', ')
+  const supportsApiKey = Boolean(provider.apiKeyEnv)
+  const draft = state.providerDrafts[provider.id] ?? {
+    baseUrl: provider.baseUrl || '',
+    apiKey: '',
+    clearApiKey: false,
+  }
+  const storageLabel = provider.secretStorage === 'keychain'
+    ? 'macOS Keychain'
+    : provider.secretStorage === 'env'
+      ? 'ortam degiskeni'
+    : provider.hasStoredApiKey
+      ? 'uygulama config'
+      : 'ortam degiskeni veya bos'
+
+  return `
+    <article class="provider-card ${provider.available ? 'ok' : 'warn'}">
       <div class="provider-head">
         <strong>${escapeHtml(provider.id)}</strong>
         <span class="provider-pill">${provider.available ? 'ready' : 'setup'}</span>
@@ -257,16 +302,18 @@ function renderProviders(settings) {
           <input
             type="text"
             data-provider-base-url="${escapeHtml(provider.id)}"
-            value="${escapeHtml(provider.baseUrl || '')}"
+            value="${escapeHtml(draft.baseUrl)}"
             placeholder="https://..."
           />
         </label>
         ${supportsApiKey ? `
           <label class="field compact-field">
-            <span>API key ${provider.hasStoredApiKey ? '· kayitli' : ''}</span>
+            <span>API key ${provider.hasCredential ? `· ${escapeHtml(storageLabel)}` : ''}</span>
             <input
               type="password"
               data-provider-api-key="${escapeHtml(provider.id)}"
+              data-clear-api-key="${draft.clearApiKey ? 'true' : 'false'}"
+              value="${escapeHtml(draft.apiKey)}"
               placeholder="${escapeHtml(provider.apiKeyEnv || 'API_KEY')}"
               autocomplete="off"
             />
@@ -279,14 +326,47 @@ function renderProviders(settings) {
             type="button"
             class="secondary provider-inline-button"
             data-provider-clear-key="${escapeHtml(provider.id)}"
-          >Kayitli key'i temizle</button>
+          >${draft.clearApiKey ? "Key temizlenecek" : "Kayitli key'i temizle"}</button>
           <span class="provider-inline-note">Bos birakirsan mevcut key korunur.</span>
         </div>
       ` : ''}
       ${discoveredModels ? `<div class="provider-models">${escapeHtml(discoveredModels)}</div>` : ''}
-    `
-    providersPanel.append(node)
-  }
+    </article>
+  `
+}
+
+function renderAdvancedProviderPanel(providers) {
+  const localCount = providers.filter(provider => provider.group === 'local').length
+  const cloudCount = providers.filter(provider => provider.group === 'cloud').length
+  const missingKeys = providers.filter(provider => provider.apiKeyEnv && !provider.hasCredential).length
+  const keychainCount = providers.filter(provider => provider.secretStorage === 'keychain').length
+
+  return `
+    <article class="provider-card">
+      <div class="provider-head">
+        <strong>Secret storage</strong>
+        <span class="provider-pill">${keychainCount ? 'keychain' : 'env/config'}</span>
+      </div>
+      <div class="provider-status">Cloud provider key'leri macOS Keychain icinde saklanabilir. Ortam degiskenleri fallback olarak calismaya devam eder.</div>
+      <div class="provider-models">${escapeHtml(`${keychainCount} keychain, ${missingKeys} setup bekliyor`)}</div>
+    </article>
+    <article class="provider-card">
+      <div class="provider-head">
+        <strong>Gruplar</strong>
+        <span class="provider-pill">overview</span>
+      </div>
+      <div class="provider-status">${escapeHtml(`${localCount} local provider, ${cloudCount} cloud provider tanimli.`)}</div>
+      <div class="provider-models">${escapeHtml(providers.map(provider => `${provider.id}: ${provider.baseUrl || 'default endpoint'}`).join(' · '))}</div>
+    </article>
+    <article class="provider-card">
+      <div class="provider-head">
+        <strong>Advanced note</strong>
+        <span class="provider-pill">custom endpoints</span>
+      </div>
+      <div class="provider-status">Base URL alanlari Local ve Cloud sekmelerinde duzenlenir. Bu panel, saklama ve baglanti stratejisini ozetler.</div>
+      <div class="provider-hint">Cloud key'lerini uygulama icinden kaydet, yerel modellere gecmeden once Ollama veya LM Studio endpoint'lerini dogrula.</div>
+    </article>
+  `
 }
 
 function renderAgent(settings) {
@@ -388,27 +468,12 @@ function renderMemory(settings) {
   const notes = settings.notes ?? []
   const tasks = settings.tasks ?? []
 
-  memorySessionsPanel.innerHTML = sessions.length
-    ? sessions.map(session => `
-        <button
-          type="button"
-          class="session-card ${session.sessionId === state.sessionId ? 'active' : ''}"
-          data-session-id="${escapeHtml(session.sessionId)}"
-        >
-          <div class="session-card-head">
-            <div class="session-title">${escapeHtml(session.preview || 'Yeni sohbet')}</div>
-            <span
-              class="session-delete"
-              role="button"
-              tabindex="0"
-              aria-label="Sohbeti sil"
-              data-delete-session-id="${escapeHtml(session.sessionId)}"
-            >Sil</span>
-          </div>
-          <div class="session-meta">${escapeHtml(formatTimestamp(session.updatedAt))}</div>
-        </button>
-      `).join('')
+  const sessionMarkup = sessions.length
+    ? sessions.map(renderSessionCardMarkup).join('')
     : '<div class="empty-card">Henüz kayıtlı sohbet yok.</div>'
+
+  memorySessionsPanel.innerHTML = sessionMarkup
+  drawerSessionsPanel.innerHTML = sessionMarkup
 
   memoryNotesPanel.innerHTML = notes.length
     ? notes.map(note => `
@@ -435,6 +500,28 @@ function renderMemory(settings) {
         </article>
       `).join('')
     : '<div class="empty-card">Planlanmis gorev yok.</div>'
+}
+
+function renderSessionCardMarkup(session) {
+  return `
+    <button
+      type="button"
+      class="session-card ${session.sessionId === state.sessionId ? 'active' : ''}"
+      data-session-id="${escapeHtml(session.sessionId)}"
+    >
+      <div class="session-card-head">
+        <div class="session-title">${escapeHtml(session.preview || 'Yeni sohbet')}</div>
+        <span
+          class="session-delete"
+          role="button"
+          tabindex="0"
+          aria-label="Sohbeti sil"
+          data-delete-session-id="${escapeHtml(session.sessionId)}"
+        >Sil</span>
+      </div>
+      <div class="session-meta">${escapeHtml(formatTimestamp(session.updatedAt))}</div>
+    </button>
+  `
 }
 
 function updateModelStatus() {
@@ -480,6 +567,7 @@ function renderConversation() {
   messages.innerHTML = ''
 
   if (!state.history.length) {
+    const onboarding = renderProviderOnboarding(state.settings)
     messages.innerHTML = `
       <section class="empty-state">
         <div class="eyebrow">modAI</div>
@@ -487,6 +575,7 @@ function renderConversation() {
         <p>${assistantProfileSelect.value === 'business-copilot'
           ? 'Gelir artisi, maliyet azaltma, operasyon ve buyume odakli analiz icin bir is turu veya hedef yaz. Copilot sektor ve olgunluk seviyesini infer ederek calisir.'
           : 'Eski sohbetler solda kalir. Chat altinda gorsel ekleme, gorev verme ve bilgisayar kontrolu icin hizli aksiyonlar bulunur. Tool aktivitesi ayri panelde tutulur.'}</p>
+        ${onboarding}
       </section>
     `
     return
@@ -554,6 +643,50 @@ function showThinkingMessage(label = 'modAI dusunuyor') {
   messages.append(node)
   state.thinkingNode = node
   scrollMessagesToBottom()
+}
+
+function renderProviderOnboarding(settings) {
+  const providers = settings?.providers ?? []
+  if (!providers.length) {
+    return ''
+  }
+
+  const localReady = providers.filter(provider => provider.group === 'local' && provider.available).length
+  const localTotal = providers.filter(provider => provider.group === 'local').length
+  const cloudReady = providers.filter(provider => provider.group === 'cloud' && provider.available).length
+  const cloudTotal = providers.filter(provider => provider.group === 'cloud').length
+  const missingCloudKeys = providers.filter(
+    provider => provider.group === 'cloud' && provider.apiKeyEnv && !provider.hasCredential,
+  ).length
+
+  return `
+    <section class="setup-onboarding">
+      <article class="setup-card">
+        <div class="provider-head">
+          <strong>Provider Setup</strong>
+          <span class="provider-pill">${escapeHtml(`${localReady + cloudReady}/${localTotal + cloudTotal} hazir`)}</span>
+        </div>
+        <div class="provider-status">Bos sohbette en hizli akış: local modeli dogrula, sonra gerekirse cloud provider key'lerini ekle.</div>
+        <div class="setup-grid">
+          <div class="setup-stat">
+            <span>Local</span>
+            <strong>${escapeHtml(`${localReady}/${localTotal}`)}</strong>
+            <small>Ollama veya local OpenAI-compatible sunucu</small>
+          </div>
+          <div class="setup-stat">
+            <span>Cloud</span>
+            <strong>${escapeHtml(`${cloudReady}/${cloudTotal}`)}</strong>
+            <small>${escapeHtml(missingCloudKeys ? `${missingCloudKeys} API key bekliyor` : 'Cloud tarafi hazir')}</small>
+          </div>
+        </div>
+        <div class="onboarding-actions">
+          <button type="button" class="secondary" data-open-provider-tab="local">Local Setup</button>
+          <button type="button" class="secondary" data-open-provider-tab="cloud">Cloud Setup</button>
+          <button type="button" class="secondary" data-open-provider-tab="advanced">Advanced</button>
+        </div>
+      </article>
+    </section>
+  `
 }
 
 function clearThinkingMessage() {
@@ -987,37 +1120,7 @@ function onClear() {
 }
 
 function collectSettingsPatch() {
-  const providerUpdates = {}
-  for (const input of providersPanel.querySelectorAll('[data-provider-base-url]')) {
-    const providerId = input.dataset.providerBaseUrl
-    if (!providerId) {
-      continue
-    }
-
-    providerUpdates[providerId] ??= {}
-    providerUpdates[providerId].baseUrl = input.value.trim()
-  }
-
-  for (const input of providersPanel.querySelectorAll('[data-provider-api-key]')) {
-    const providerId = input.dataset.providerApiKey
-    if (!providerId) {
-      continue
-    }
-
-    const apiKey = input.value.trim()
-    const clearApiKey = input.dataset.clearApiKey === 'true'
-    if (!apiKey && !clearApiKey) {
-      continue
-    }
-
-    providerUpdates[providerId] ??= {}
-    if (clearApiKey) {
-      providerUpdates[providerId].clearApiKey = true
-    }
-    if (apiKey) {
-      providerUpdates[providerId].apiKey = apiKey
-    }
-  }
+  const providerUpdates = collectProviderUpdates()
 
   return {
     defaultModel: modelSelect.value,
@@ -1073,22 +1176,131 @@ function onProviderPanelClick(event) {
 
   input.value = ''
   input.dataset.clearApiKey = 'true'
+  state.providerDrafts[providerId] = {
+    ...(state.providerDrafts[providerId] ?? {}),
+    apiKey: '',
+    clearApiKey: true,
+  }
   clearButton.textContent = 'Key temizlenecek'
 }
 
 function onProviderPanelInput(event) {
-  const input = event.target.closest('[data-provider-api-key]')
-  if (!input) {
+  const apiKeyInput = event.target.closest('[data-provider-api-key]')
+  if (apiKeyInput) {
+    const providerId = apiKeyInput.dataset.providerApiKey
+    const apiKey = apiKeyInput.value.trim()
+    state.providerDrafts[providerId] = {
+      ...(state.providerDrafts[providerId] ?? {}),
+      apiKey,
+      clearApiKey: false,
+    }
+    if (apiKey) {
+      apiKeyInput.dataset.clearApiKey = 'false'
+      const clearButton = providersPanel.querySelector(`[data-provider-clear-key="${cssEscape(providerId)}"]`)
+      if (clearButton) {
+        clearButton.textContent = "Kayitli key'i temizle"
+      }
+    }
     return
   }
 
-  if (input.value.trim()) {
-    input.dataset.clearApiKey = 'false'
-    const clearButton = providersPanel.querySelector(`[data-provider-clear-key="${cssEscape(input.dataset.providerApiKey)}"]`)
-    if (clearButton) {
-      clearButton.textContent = "Kayitli key'i temizle"
+  const baseUrlInput = event.target.closest('[data-provider-base-url]')
+  if (!baseUrlInput) {
+    return
+  }
+
+  const providerId = baseUrlInput.dataset.providerBaseUrl
+  state.providerDrafts[providerId] = {
+    ...(state.providerDrafts[providerId] ?? {}),
+    baseUrl: baseUrlInput.value.trim(),
+  }
+}
+
+function createProviderDrafts(providers) {
+  return Object.fromEntries(providers.map(provider => [
+    provider.id,
+    {
+      baseUrl: provider.baseUrl || '',
+      apiKey: '',
+      clearApiKey: false,
+    },
+  ]))
+}
+
+function syncProviderDraftsFromDom() {
+  for (const input of providersPanel.querySelectorAll('[data-provider-base-url]')) {
+    const providerId = input.dataset.providerBaseUrl
+    if (!providerId) {
+      continue
+    }
+
+    state.providerDrafts[providerId] = {
+      ...(state.providerDrafts[providerId] ?? {}),
+      baseUrl: input.value.trim(),
     }
   }
+
+  for (const input of providersPanel.querySelectorAll('[data-provider-api-key]')) {
+    const providerId = input.dataset.providerApiKey
+    if (!providerId) {
+      continue
+    }
+
+    state.providerDrafts[providerId] = {
+      ...(state.providerDrafts[providerId] ?? {}),
+      apiKey: input.value.trim(),
+      clearApiKey: input.dataset.clearApiKey === 'true',
+    }
+  }
+}
+
+function collectProviderUpdates() {
+  syncProviderDraftsFromDom()
+  const updates = {}
+
+  for (const [providerId, draft] of Object.entries(state.providerDrafts)) {
+    updates[providerId] = {
+      baseUrl: draft.baseUrl ?? '',
+    }
+
+    if (draft.clearApiKey) {
+      updates[providerId].clearApiKey = true
+    }
+
+    if (draft.apiKey) {
+      updates[providerId].apiKey = draft.apiKey
+    }
+  }
+
+  return updates
+}
+
+function onProviderTabClick(event) {
+  syncProviderDraftsFromDom()
+  const button = event.target.closest('[data-provider-tab]')
+  if (!button) {
+    return
+  }
+
+  const nextTab = button.dataset.providerTab
+  if (!isValidProviderTab(nextTab)) {
+    return
+  }
+
+  state.providerTab = nextTab
+  renderProviders(state.settings ?? {})
+}
+
+function onMessageAreaClick(event) {
+  const button = event.target.closest('[data-open-provider-tab]')
+  if (!button) {
+    return
+  }
+
+  openSettingsDrawer({
+    providerTab: button.dataset.openProviderTab,
+    scrollToProviders: true,
+  })
 }
 
 function setBusy(isBusy, label) {
@@ -1317,9 +1529,20 @@ async function onSessionCardClick(event) {
   }
 }
 
-function openSettingsDrawer() {
+function openSettingsDrawer(options = {}) {
+  if (isValidProviderTab(options.providerTab)) {
+    state.providerTab = options.providerTab
+    renderProviders(state.settings ?? {})
+  }
+
   settingsDrawer.classList.remove('hidden')
   drawerScrim.classList.remove('hidden')
+
+  if (options.scrollToProviders) {
+    window.requestAnimationFrame(() => {
+      providersSection?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
+  }
 }
 
 function openActivityDrawer() {
@@ -1498,6 +1721,21 @@ function formatAssistantProfileLabel(value) {
 function normalizeSteps(value) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.max(1, Math.min(12, Math.round(parsed))) : 6
+}
+
+function isValidProviderTab(value) {
+  return ['local', 'cloud', 'advanced'].includes(value)
+}
+
+function getDefaultProviderTab(settings) {
+  const providers = settings?.providers ?? []
+  if (providers.some(provider => provider.group === 'cloud' && provider.apiKeyEnv && !provider.hasCredential)) {
+    return 'cloud'
+  }
+  if (providers.some(provider => provider.group === 'local' && !provider.available)) {
+    return 'local'
+  }
+  return 'local'
 }
 
 function findLastUserMessage(items) {

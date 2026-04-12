@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { createDefaultConfig, mergeConfigWithDefaults } from './defaultConfig.mjs'
+import { sanitizeConfigForDisk } from './providerSecrets.mjs'
 import { safeJson } from '../utils/json.mjs'
 
 export class ConfigStore {
@@ -66,7 +67,8 @@ export class ConfigStore {
 
   async save(config) {
     await this.ensureLayout()
-    await writeFile(this.getConfigPath(), safeJson(mergeConfigWithDefaults(config)), 'utf8')
+    const sanitized = sanitizeConfigForDisk(config)
+    await writeFile(this.getConfigPath(), safeJson(mergeConfigWithDefaults(sanitized)), 'utf8')
   }
 
   async update(mutator) {

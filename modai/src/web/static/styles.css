@@ -147,6 +147,13 @@ button {
   color: var(--muted);
 }
 
+.drawer-mobile-copy,
+.provider-section-copy {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .sidebar h1,
 .chat-header h2,
 .drawer-header h3,
@@ -254,6 +261,11 @@ button:disabled {
   margin-top: 0.7rem;
   max-height: calc(100vh - 210px);
   overflow: auto;
+}
+
+.drawer-session-list {
+  max-height: none;
+  margin-top: 0.85rem;
 }
 
 .session-card {
@@ -408,6 +420,50 @@ button:disabled {
   margin: 0.55rem 0 0;
   line-height: 1.7;
   color: var(--muted);
+}
+
+.setup-onboarding {
+  margin-top: 1.15rem;
+}
+
+.setup-card {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0.012));
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.setup-stat {
+  padding: 0.82rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.setup-stat span,
+.setup-stat small {
+  display: block;
+  color: var(--muted);
+}
+
+.setup-stat strong {
+  display: block;
+  margin: 0.16rem 0;
+  font-size: 1.02rem;
+}
+
+.onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
 }
 
 .message {
@@ -763,6 +819,18 @@ textarea {
   background: rgba(255, 255, 255, 0.015);
 }
 
+.drawer-mobile-shell {
+  display: none;
+}
+
+.drawer-mobile-head,
+.provider-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
 .field-grid {
   display: grid;
   gap: 0.75rem;
@@ -849,6 +917,22 @@ textarea {
   margin-top: 0.65rem;
 }
 
+.provider-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.provider-tab {
+  padding-inline: 0.72rem;
+}
+
+.provider-tab.is-active {
+  background: var(--accent-soft);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
 .compact-field span {
   margin-bottom: 0.28rem;
 }
@@ -933,13 +1017,15 @@ textarea {
   }
 
   .sidebar {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    height: auto;
+    display: none;
   }
 
-  .session-list {
-    max-height: 13rem;
+  .drawer-mobile-shell {
+    display: block;
+  }
+
+  .settings-drawer {
+    width: min(420px, calc(100% - 1rem));
   }
 
   body {
@@ -960,6 +1046,17 @@ textarea {
   }
 
   .header-select {
+    width: 100%;
+  }
+
+  .setup-grid,
+  .provider-section-head,
+  .drawer-mobile-head {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .settings-drawer {
     width: 100%;
   }
 }

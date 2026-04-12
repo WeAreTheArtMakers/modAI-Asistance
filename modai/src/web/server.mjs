@@ -10,9 +10,11 @@ import { createDesktopShortcut } from '../core/desktopShortcuts.mjs'
 import { detectInteractionMode, shouldEnableAgentForMode } from '../core/requestMode.mjs'
 import { PermissionRequiredError } from '../core/toolAccess.mjs'
 import { ConfigStore } from '../services/ConfigStore.mjs'
+import { KeychainStore } from '../services/KeychainStore.mjs'
 import { PluginStore } from '../services/PluginStore.mjs'
 import { SessionStore } from '../services/SessionStore.mjs'
 import { SkillStore } from '../services/SkillStore.mjs'
+import { applyProviderSecretUpdates, prepareRuntimeConfig } from '../services/providerSecrets.mjs'
 import { createDefaultProviderRegistry } from '../core/ProviderRegistry.mjs'
 import { inferVisionSupport } from '../providers/messageContent.mjs'
 import { safeJson } from '../utils/json.mjs'
@@ -20,6 +22,7 @@ import { safeJson } from '../utils/json.mjs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const staticDir = join(__dirname, 'static')
 const configStore = new ConfigStore()
+const keychainStore = new KeychainStore()
 const sessionStore = new SessionStore(configStore)
 const providerRegistry = createDefaultProviderRegistry()
 
@@ -49,7 +52,7 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && (url.pathname === '/api/config' || url.pathname === '/api/settings')) {
-      const config = await configStore.load()
+      const config = await loadRuntimeConfig()
       return sendJson(response, 200, await buildClientState(config))
     }
 
@@ -82,11 +85,12 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'POST' && url.pathname === '/api/settings') {
       const body = await readJson(request)
-      const config = await configStore.update(current => {
-        applySettingsPatch(current, body)
+      const config = await configStore.update(async current => {
+        await applySettingsPatch(current, body)
         return current
       })
-      return sendJson(response, 200, await buildClientState(config))
+      const runtimeConfig = await prepareRuntimeConfig(config, { configStore, keychainStore })
+      return sendJson(response, 200, await buildClientState(runtimeConfig))
     }
 
     if (request.method === 'POST' && url.pathname === '/api/uploads') {
@@ -102,7 +106,7 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && url.pathname === '/api/chat') {
-      const config = await configStore.load()
+      const config = await loadRuntimeConfig()
       const body = await readJson(request)
       const sessionId = readSessionId(body.sessionId) ?? sessionStore.createSessionId()
       const existingSession = await sessionStore.loadSession(sessionId)
@@ -334,6 +338,11 @@ server.on('error', error => {
 installParentWatch()
 installShutdownHooks()
 
+async function loadRuntimeConfig() {
+  const config = await configStore.load()
+  return prepareRuntimeConfig(config, { configStore, keychainStore })
+}
+
 async function buildClientState(config) {
   const providerInsights = await getProviderInsights(config)
   const models = Object.entries(config.models).map(([id, value]) => ({
@@ -415,18 +424,31 @@ function buildProviderState(alias, providerConfig, providerInsights) {
   const providerInsight = providerInsights.get(alias)
   const available = providerInsight?.health?.ok ?? false
   const availabilityMessage = providerInsight?.health?.message ?? 'provider unavailable'
+  const hasStoredApiKey = typeof providerConfig.apiKey === 'string' && providerConfig.apiKey.trim().length > 0
+  const envApiKey = providerConfig.apiKeyEnv ? (process.env[providerConfig.apiKeyEnv] ?? '').trim() : ''
+  const hasCredential = hasStoredApiKey || Boolean(envApiKey)
 
   return {
     id: alias,
     type: providerConfig.type,
+    group: classifyProviderGroup(alias, providerConfig),
     baseUrl: providerConfig.baseUrl,
     apiKeyEnv: providerConfig.apiKeyEnv ?? '',
-    hasStoredApiKey: typeof providerConfig.apiKey === 'string' && providerConfig.apiKey.trim().length > 0,
+    secretStorage: providerConfig.apiKeySource ?? (envApiKey ? 'env' : ''),
+    hasStoredApiKey,
+    hasCredential,
     available,
     availabilityMessage,
     setupHint: buildProviderSetupHint(alias, providerConfig, availabilityMessage),
     discoveredModels: providerInsight?.models ?? [],
   }
+}
+
+function classifyProviderGroup(alias, providerConfig) {
+  if (providerConfig.type === 'ollama' || alias === 'openaiLocal' || providerConfig.baseUrl?.includes('127.0.0.1')) {
+    return 'local'
+  }
+  return 'cloud'
 }
 
 async function getProviderInsights(config) {
@@ -515,6 +537,10 @@ function buildDiscoveredModels(config, providerInsights, existingModels) {
 }
 
 function buildProviderSetupHint(alias, providerConfig, availabilityMessage) {
+  if (providerConfig.apiKeySource === 'keychain') {
+    return 'API key macOS Keychain icinde saklaniyor. Istersen ayarlardan guncelleyebilirsin.'
+  }
+
   if (typeof providerConfig.apiKey === 'string' && providerConfig.apiKey.trim()) {
     return 'API key uygulama icine kaydedildi. Istersen ayarlardan guncelleyebilirsin.'
   }
@@ -532,10 +558,10 @@ function buildProviderSetupHint(alias, providerConfig, availabilityMessage) {
   }
 
   if (providerConfig.type === 'anthropic' || providerConfig.type === 'gemini') {
-    return `Set the required API key and relaunch modAI to enable ${alias}.`
+    return `Gerekli API key'i ayarlardan ekleyerek ${alias} baglantisini acabilirsin.`
   }
 
-  return 'Verify the provider endpoint and credentials, then relaunch modAI.'
+  return 'Provider endpoint ve kimlik bilgilerini kontrol et.'
 }
 
 async function safeHealthcheck(provider) {
@@ -549,7 +575,7 @@ async function safeHealthcheck(provider) {
   }
 }
 
-function applySettingsPatch(config, patch = {}) {
+async function applySettingsPatch(config, patch = {}) {
   if (typeof patch.defaultModel === 'string') {
     try {
       resolveModel(config, patch.defaultModel)
@@ -580,13 +606,9 @@ function applySettingsPatch(config, patch = {}) {
       if (typeof update.baseUrl === 'string' && update.baseUrl.trim()) {
         config.providers[alias].baseUrl = update.baseUrl.trim()
       }
-
-      if (update.clearApiKey === true) {
-        delete config.providers[alias].apiKey
-      } else if (typeof update.apiKey === 'string' && update.apiKey.trim()) {
-        config.providers[alias].apiKey = update.apiKey.trim()
-      }
     }
+
+    await applyProviderSecretUpdates(config, patch.providers, { keychainStore })
   }
 
   if (patch.agent && typeof patch.agent === 'object') {

@@ -87,6 +87,15 @@
         </div>
 
         <div class="drawer-scroll">
+          <section class="drawer-section drawer-mobile-shell" id="drawerMobileShell">
+            <div class="drawer-mobile-head">
+              <div class="section-title">Panel</div>
+              <button type="button" id="drawerNewChatButton" class="secondary">Yeni Sohbet</button>
+            </div>
+            <div class="drawer-mobile-copy">Küçük ekranlarda sohbetler ve ayarlar tek panel içinde birleşir.</div>
+            <div class="session-list drawer-session-list" id="drawerSessionsPanel"></div>
+          </section>
+
           <section class="drawer-section" id="activityShell">
             <div class="activity-header">
               <div>
@@ -156,8 +165,18 @@
             <button type="button" id="saveSettingsButton" class="primary full-width">Ayarları Kaydet</button>
           </section>
 
-          <section class="drawer-section">
-            <div class="section-title">Providers</div>
+          <section class="drawer-section" id="providersSection">
+            <div class="provider-section-head">
+              <div>
+                <div class="section-title">Providers</div>
+                <div class="provider-section-copy">Yerel modeller, cloud baglantilari ve gelismis endpoint ayarlari.</div>
+              </div>
+              <div class="provider-tabs" id="providerTabList">
+                <button type="button" class="secondary provider-tab is-active" data-provider-tab="local">Local</button>
+                <button type="button" class="secondary provider-tab" data-provider-tab="cloud">Cloud</button>
+                <button type="button" class="secondary provider-tab" data-provider-tab="advanced">Advanced</button>
+              </div>
+            </div>
             <div class="provider-list" id="providersPanel"></div>
           </section>
 
