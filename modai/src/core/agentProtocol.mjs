@@ -20,6 +20,8 @@ export function createAgentProtocolPrompt({ tools, maxSteps }) {
     'Rules:',
     '- Return only one <tool_call> block or one <final> block in each response.',
     '- Prefer ls, read, and fetch before shell.',
+    '- Prefer code_run over shell when you need to execute or verify code safely.',
+    '- Prefer memory_semantic or memory_search when prior sessions may contain relevant context.',
     '- For desktop control, prefer screen_analyze before click_text or mouse_click.',
     '- Prefer click_text when visible text is enough; use mouse_click only with explicit coordinates.',
     '- Use type_text and press_key for keyboard control before falling back to applescript.',

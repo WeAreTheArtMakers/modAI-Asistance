@@ -19,8 +19,11 @@
 
         <button type="button" id="clearButton" class="primary full-width" data-i18n="newChat">New Chat</button>
 
-        <section class="sidebar-section">
-          <div class="section-title" data-i18n="chats">Chats</div>
+        <section class="sidebar-section" id="chatsSection">
+          <div class="sidebar-section-head">
+            <div class="section-title" data-i18n="chats">Chats</div>
+            <button type="button" id="toggleChatsButton" class="section-toggle" aria-expanded="true" aria-label="Collapse chats">−</button>
+          </div>
           <div class="session-list" id="memorySessionsPanel"></div>
         </section>
 
@@ -84,7 +87,10 @@
             <h3 data-i18n="settingsTitle">Settings and Tools</h3>
             <div class="drawer-subtitle" data-i18n="settingsSubtitle">Manage providers, language, permissions, skills, and runtime behavior.</div>
           </div>
-          <button type="button" id="closeSettingsButton" class="secondary" data-i18n="close">Close</button>
+          <div class="drawer-header-actions">
+            <button type="button" id="settingsSizeButton" class="secondary" aria-label="Expand panel">+</button>
+            <button type="button" id="closeSettingsButton" class="secondary" data-i18n="close">Close</button>
+          </div>
         </div>
 
         <div class="drawer-tabs" id="drawerTabList">

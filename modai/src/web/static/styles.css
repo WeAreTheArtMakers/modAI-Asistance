@@ -241,6 +241,14 @@ button {
   overflow: hidden;
 }
 
+.sidebar-section-head,
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
 .full-width {
   width: 100%;
 }
@@ -269,6 +277,24 @@ button {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--line);
+}
+
+.section-toggle {
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.section-toggle:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: var(--accent-soft);
 }
 
 .quick-action.active {
@@ -767,7 +793,8 @@ button:disabled {
 }
 
 .drawer-activity-feed {
-  max-height: 240px;
+  max-height: none;
+  min-height: 18rem;
 }
 
 .activity-item {
@@ -842,11 +869,16 @@ textarea {
   bottom: 0;
   display: flex;
   flex-direction: column;
-  width: min(400px, calc(100% - 2rem));
+  width: min(440px, calc(100% - 1rem));
   border-radius: 0;
   border-left: 1px solid var(--line);
   background: var(--drawer-bg);
   z-index: 20;
+  transition: width 160ms ease;
+}
+
+.settings-drawer[data-size="wide"] {
+  width: min(760px, calc(100% - 1rem));
 }
 
 .settings-drawer.hidden,
@@ -863,7 +895,8 @@ textarea {
 }
 
 .drawer-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.45rem;
   padding: 0.85rem 1rem 0;
   border-bottom: 1px solid var(--line);
@@ -871,12 +904,15 @@ textarea {
 }
 
 .drawer-tab {
-  padding: 0.46rem 0.7rem;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0.52rem 0.68rem;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: transparent;
   color: var(--muted);
   font-weight: 600;
+  white-space: normal;
 }
 
 .drawer-tab.is-active,
@@ -891,6 +927,7 @@ textarea {
   min-height: 0;
   overflow: auto;
   padding: 1rem;
+  scroll-behavior: smooth;
 }
 
 .hidden-section {
@@ -906,6 +943,14 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 0.9rem;
   background: var(--surface-card);
+}
+
+.sidebar-section.is-collapsed {
+  flex: 0 0 auto;
+}
+
+.sidebar-section.is-collapsed .session-list {
+  display: none;
 }
 
 .drawer-footer {
@@ -1181,6 +1226,10 @@ textarea {
     width: min(420px, calc(100% - 1rem));
   }
 
+  .settings-drawer[data-size="wide"] {
+    width: min(560px, calc(100% - 0.5rem));
+  }
+
   body {
     overflow: auto;
   }
@@ -1211,6 +1260,10 @@ textarea {
 
   .settings-drawer {
     width: 100%;
+  }
+
+  .drawer-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -15,7 +15,7 @@ export function createMemoryTools() {
     },
     {
       name: 'memory_search',
-      description: 'Search previous session messages and notes',
+      description: 'Search previous session messages and notes with keyword plus semantic ranking',
       inputHint: '{"query":"UI redesign","limit":6}',
       permissionKey: 'memory_search',
       requiredMode: 'pro',
@@ -25,11 +25,34 @@ export function createMemoryTools() {
           throw new Error('Usage: memory_search {"query":"...","limit":6}')
         }
         const limit = normalizeLimit(input?.limit)
-        const sessions = await context?.sessionStore?.search?.(query, limit) ?? []
+        const exactSessions = await context?.sessionStore?.search?.(query, limit) ?? []
+        const semantic = await context?.sessionStore?.semanticSearch?.(query, limit) ?? { sessions: [], notes: [] }
         const notes = (await context?.sessionStore?.listNotes?.(limit * 2) ?? [])
           .filter(note => JSON.stringify(note).toLowerCase().includes(query.toLowerCase()))
           .slice(0, limit)
-        return JSON.stringify({ query, sessions, notes }, null, 2)
+        return JSON.stringify({
+          query,
+          exactSessions,
+          exactNotes: notes,
+          semanticSessions: semantic.sessions ?? [],
+          semanticNotes: semantic.notes ?? [],
+        }, null, 2)
+      },
+    },
+    {
+      name: 'memory_semantic',
+      description: 'Search memory by semantic similarity across messages and notes',
+      inputHint: '{"query":"dark mode contrast issue","limit":6}',
+      permissionKey: 'memory_search',
+      requiredMode: 'pro',
+      async run(input, context) {
+        const query = readQuery(input)
+        if (!query) {
+          throw new Error('Usage: memory_semantic {"query":"...","limit":6}')
+        }
+        const limit = normalizeLimit(input?.limit)
+        const semantic = await context?.sessionStore?.semanticSearch?.(query, limit) ?? { sessions: [], notes: [] }
+        return JSON.stringify({ query, ...semantic }, null, 2)
       },
     },
     {

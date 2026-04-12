@@ -1,12 +1,13 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { createRuntimeContext } from '../core/runtimeContext.mjs'
 import { summarizeToolEvent } from '../core/agentProtocol.mjs'
 import { createDesktopShortcut } from '../core/desktopShortcuts.mjs'
+import { resolveAgentModelRoute } from '../core/agentRouting.mjs'
 import { detectInteractionMode, shouldEnableAgentForMode } from '../core/requestMode.mjs'
 import { PermissionRequiredError } from '../core/toolAccess.mjs'
 import { ConfigStore } from '../services/ConfigStore.mjs'
@@ -138,7 +139,18 @@ const server = createServer(async (request, response) => {
         ? body.messages
         : [{ role: 'user', content: body.prompt ?? '', createdAt: new Date().toISOString() }]
       const requestedModel = body.model || config.defaultModel
-      const modelRef = resolveModel(config, requestedModel)
+      const interactionMode = detectInteractionMode(inputMessages)
+      const providerInsights = await getProviderInsights(config)
+      const routedModel = resolveAgentModelRoute({
+        config,
+        providerInsights,
+        requestedModel,
+        messages: inputMessages,
+        interactionMode,
+        assistantProfile: config.assistant?.profile ?? 'general',
+        agentRequested: body.agent?.enabled ?? config.agent?.enabled !== false,
+      })
+      const modelRef = resolveModel(config, routedModel.modelId)
       const runtimeContext = await createRuntimeContext({
         config,
         configStore,
@@ -148,14 +160,12 @@ const server = createServer(async (request, response) => {
         platform: process.platform,
       })
       const provider = providerRegistry.create(modelRef.provider, config.providers[modelRef.provider])
-      const providerInsights = await getProviderInsights(config)
       const modelStatus = describeModelAvailability(modelRef.id, config.models[modelRef.id] ?? modelRef, providerInsights)
       if (!modelStatus.available) {
         throw new Error(modelStatus.availabilityMessage)
       }
 
       const agentRequested = body.agent?.enabled ?? config.agent?.enabled !== false
-      const interactionMode = detectInteractionMode(inputMessages)
       const taskDraft = normalizeTaskDraft(body.taskDraft, interactionMode)
       const agent = {
         enabled: shouldEnableAgentForMode(agentRequested, interactionMode),
@@ -212,6 +222,8 @@ const server = createServer(async (request, response) => {
         return sendJson(response, 200, {
           text,
           model: modelRef.id,
+          route: routedModel.route,
+          autoSelectedModel: routedModel.autoSelected,
           sessionId,
           startedAt,
           steps: 0,
@@ -272,6 +284,8 @@ const server = createServer(async (request, response) => {
           return sendJson(response, 200, {
             text,
             model: modelRef.id,
+            route: routedModel.route,
+            autoSelectedModel: routedModel.autoSelected,
             sessionId,
             startedAt,
             steps: 1,
@@ -284,6 +298,8 @@ const server = createServer(async (request, response) => {
             return sendJson(response, 200, {
               text: error.message,
               model: modelRef.id,
+              route: routedModel.route,
+              autoSelectedModel: routedModel.autoSelected,
               sessionId,
               startedAt,
               steps: 1,
@@ -343,6 +359,8 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, {
         text: result.text,
         model: modelRef.id,
+        route: routedModel.route,
+        autoSelectedModel: routedModel.autoSelected,
         sessionId,
         startedAt,
         steps: result.steps,
@@ -356,21 +374,11 @@ const server = createServer(async (request, response) => {
       return sendFile(response, join(staticDir, 'index.html'), 'text/html; charset=utf-8')
     }
 
-    if (request.method === 'GET' && url.pathname === '/app.js') {
-      return sendFile(response, join(staticDir, 'app.js'), 'text/javascript; charset=utf-8')
-    }
-
-    if (request.method === 'GET' && url.pathname === '/styles.css') {
-      return sendFile(response, join(staticDir, 'styles.css'), 'text/css; charset=utf-8')
-    }
-
-    if (request.method === 'GET' && url.pathname === '/brand-mark.svg') {
-      return sendFile(response, join(staticDir, 'brand-mark.svg'), 'image/svg+xml; charset=utf-8')
-    }
-
-    if (request.method === 'GET' && url.pathname.startsWith('/locales/')) {
-      const name = basename(url.pathname)
-      return sendFile(response, join(staticDir, 'locales', name), 'application/json; charset=utf-8')
+    if (request.method === 'GET') {
+      const assetPath = resolveStaticAsset(url.pathname)
+      if (assetPath) {
+        return sendFile(response, assetPath, getStaticContentType(assetPath))
+      }
     }
 
     sendJson(response, 404, { error: 'Not found' })
@@ -1008,6 +1016,42 @@ function detectUploadContentType(fileName) {
     return 'image/gif'
   }
   return 'application/octet-stream'
+}
+
+function resolveStaticAsset(pathname) {
+  const requested = decodeURIComponent(pathname || '/')
+  const relativePath = requested === '/' ? 'index.html' : requested.replace(/^\/+/, '')
+  const target = resolve(staticDir, relativePath)
+  if (!target.startsWith(`${staticDir}/`) && target !== resolve(staticDir, 'index.html')) {
+    return null
+  }
+
+  const extension = extname(target).toLowerCase()
+  if (!['.html', '.js', '.css', '.svg', '.json', '.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(extension)) {
+    return null
+  }
+
+  return target
+}
+
+function getStaticContentType(filePath) {
+  const extension = extname(filePath).toLowerCase()
+  if (extension === '.html') {
+    return 'text/html; charset=utf-8'
+  }
+  if (extension === '.js') {
+    return 'text/javascript; charset=utf-8'
+  }
+  if (extension === '.css') {
+    return 'text/css; charset=utf-8'
+  }
+  if (extension === '.svg') {
+    return 'image/svg+xml; charset=utf-8'
+  }
+  if (extension === '.json') {
+    return 'application/json; charset=utf-8'
+  }
+  return detectUploadContentType(filePath)
 }
 
 function readSessionId(value) {

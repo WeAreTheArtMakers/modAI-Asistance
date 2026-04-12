@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
+import { rankSemanticMatches } from './semanticMemory.mjs'
+
 let sqliteModulePromise = null
 
 export class SessionStore {
@@ -171,6 +173,53 @@ export class SessionStore {
       ORDER BY m.created_at DESC
       LIMIT ?
     `).all(likePattern, limit)
+  }
+
+  async semanticSearch(query, limit = 8) {
+    const db = await this.ensureDb()
+    const textQuery = String(query ?? '').trim()
+    if (!textQuery) {
+      return { sessions: [], notes: [] }
+    }
+
+    const messages = db.prepare(`
+      SELECT
+        m.session_id AS sessionId,
+        s.model_id AS modelId,
+        s.preview,
+        m.role,
+        m.content,
+        m.created_at AS createdAt
+      FROM messages m
+      JOIN sessions s ON s.session_id = m.session_id
+      ORDER BY m.created_at DESC
+      LIMIT 250
+    `).all()
+
+    const notes = db.prepare(`
+      SELECT
+        note_id AS noteId,
+        session_id AS sessionId,
+        category,
+        title,
+        content,
+        source,
+        created_at AS createdAt
+      FROM notes
+      ORDER BY created_at DESC
+      LIMIT 120
+    `).all()
+
+    return {
+      sessions: rankSemanticMatches(textQuery, messages.map(message => ({
+        ...message,
+        semanticText: `${message.preview}\n${message.content}`,
+      })), { limit }),
+      notes: rankSemanticMatches(textQuery, notes.map(note => ({
+        ...note,
+        semanticText: `${note.title}\n${note.content}`,
+      })), { limit }),
+    }
   }
 
   async addNote({ title, content, category = 'general', sessionId = '', source = 'agent' }) {

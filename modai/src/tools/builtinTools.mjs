@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { createComputerUseTools } from './computerUse.mjs'
 import { createMemoryTools } from './memoryTools.mjs'
+import { createSandboxTools } from './sandboxTools.mjs'
 
 const execAsync = promisify(exec)
 
@@ -148,6 +149,7 @@ export function createBuiltinTools() {
       },
     },
     ...createComputerUseTools(),
+    ...createSandboxTools(),
     {
       name: 'applescript',
       description: 'Run AppleScript for advanced computer control',

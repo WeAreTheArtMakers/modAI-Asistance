@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>modAI | Local-first AI workstation for Mac</title>
+    <meta
+      name="description"
+      content="modAI turns local AI, agent routing, sandboxed execution, and semantic memory into a Mac-native workspace."
+    />
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="modAI">
+        <img src="./assets/modai-logo.svg" alt="modAI" />
+      </a>
+      <nav class="topnav">
+        <a href="#product" data-copy="navProduct">Product</a>
+        <a href="#screens" data-copy="navScreens">Screens</a>
+        <a href="#stack" data-copy="navStack">Stack</a>
+        <a href="#contact" data-copy="navContact">Contact</a>
+      </nav>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" class="lang-button is-active" data-lang="en">EN</button>
+        <button type="button" class="lang-button" data-lang="tr">TR</button>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow" data-copy="heroEyebrow">Mac-native AI operating layer</div>
+          <h1 data-copy="heroTitle">Local-first AI that can plan, inspect, execute, and remember.</h1>
+          <p class="hero-body" data-copy="heroBody">
+            modAI packages agent routing, sandboxed code execution, semantic memory, desktop control, and a cleaner workspace UI into one product for operators and technical teams.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#screens" data-copy="heroPrimary">View product tour</a>
+            <a class="secondary" href="#contact" data-copy="heroSecondary">Become a launch partner</a>
+          </div>
+          <div class="hero-metrics">
+            <article class="metric">
+              <strong>4</strong>
+              <span data-copy="metricModes">auto-routed modes</span>
+            </article>
+            <article class="metric">
+              <strong>100%</strong>
+              <span data-copy="metricLocal">local-first runtime</span>
+            </article>
+            <article class="metric">
+              <strong>2</strong>
+              <span data-copy="metricCore">new core layers shipped</span>
+            </article>
+          </div>
+        </div>
+
+        <div class="hero-art" aria-hidden="true">
+          <div class="logo-orbit">
+            <div class="logo-pulse"></div>
+            <img class="logo-mark" src="./assets/modai-logo.svg" alt="" />
+          </div>
+          <div class="hero-card hero-card-main">
+            <div class="card-title" data-copy="cardRoute">Agent routing</div>
+            <div class="card-copy" data-copy="cardRouteBody">Code, visual, desktop, and business tasks choose the right model automatically.</div>
+          </div>
+          <div class="hero-card hero-card-side">
+            <div class="card-title" data-copy="cardSandbox">Sandboxed execution</div>
+            <div class="card-copy" data-copy="cardSandboxBody">Test code in an isolated temp workspace with network disabled and workspace writes blocked.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="feature-band" id="product">
+        <article class="feature-tile">
+          <h2 data-copy="tileRoutingTitle">Capability-aware routing</h2>
+          <p data-copy="tileRoutingBody">modAI routes agent work to the best available model for coding, visual reasoning, desktop execution, or business planning.</p>
+        </article>
+        <article class="feature-tile">
+          <h2 data-copy="tileMemoryTitle">Semantic memory</h2>
+          <p data-copy="tileMemoryBody">Past sessions and internal notes are recalled by similarity, not only exact keyword matches.</p>
+        </article>
+        <article class="feature-tile">
+          <h2 data-copy="tileWorkspaceTitle">Sharper workspace</h2>
+          <p data-copy="tileWorkspaceBody">The rebuilt UI fixes the settings drawer, delete flow, activity visibility, and oversized frontend entrypoint.</p>
+        </article>
+      </section>
+
+      <section class="reasons-section">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="reasonsEyebrow">Why teams buy</div>
+          <h2 data-copy="reasonsTitle">Real buying reasons, not generic AI promises.</h2>
+        </div>
+        <div class="reasons-grid">
+          <article class="reason-card">
+            <h3 data-copy="reasonOneTitle">You keep local control</h3>
+            <p data-copy="reasonOneBody">modAI is shaped for teams that want local runtime paths, explicit permissions, and fewer hidden cloud assumptions.</p>
+          </article>
+          <article class="reason-card">
+            <h3 data-copy="reasonTwoTitle">It does more than answer</h3>
+            <p data-copy="reasonTwoBody">The product can remember prior work, route the task to the right model, execute safely, and surface activity instead of hiding it.</p>
+          </article>
+          <article class="reason-card">
+            <h3 data-copy="reasonThreeTitle">It fits technical operators</h3>
+            <p data-copy="reasonThreeBody">Engineers, founders, and workflow-heavy teams can move from planning to verification without leaving the same workspace.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen-section" id="screens">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="screensEyebrow">Product screens</div>
+          <h2 data-copy="screensTitle">A focused desktop workspace, not a generic chat shell.</h2>
+        </div>
+        <div class="screen-grid">
+          <figure class="screen-card">
+            <img src="./assets/screen-chat.svg" alt="modAI chat workspace screenshot" />
+            <figcaption data-copy="screenChatCaption">Chat workspace with cleaner badges, mode chips, and a collapsible chat rail.</figcaption>
+          </figure>
+          <figure class="screen-card">
+            <img src="./assets/screen-settings.svg" alt="modAI settings drawer screenshot" />
+            <figcaption data-copy="screenSettingsCaption">Wider settings drawer with visible tabs, expandable layout, and grouped controls.</figcaption>
+          </figure>
+          <figure class="screen-card">
+            <img src="./assets/screen-agent.svg" alt="modAI agent routing screenshot" />
+            <figcaption data-copy="screenAgentCaption">Agent routing plus sandbox and semantic memory layers surfaced as first-class product primitives.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="stack-section" id="stack">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="stackEyebrow">What ships now</div>
+          <h2 data-copy="stackTitle">Built for launch conversations, demos, and early sales.</h2>
+        </div>
+        <div class="stack-grid">
+          <article class="stack-card">
+            <h3 data-copy="stackCardOneTitle">Operator-grade control</h3>
+            <p data-copy="stackCardOneBody">Desktop actions, task drafts, model routing, and activity telemetry give teams a controllable AI cockpit instead of a black box.</p>
+          </article>
+          <article class="stack-card">
+            <h3 data-copy="stackCardTwoTitle">Safe execution layer</h3>
+            <p data-copy="stackCardTwoBody">The new code sandbox supports isolated verification for generated scripts and fast experiments without touching the main workspace.</p>
+          </article>
+          <article class="stack-card">
+            <h3 data-copy="stackCardThreeTitle">Memory that compounds</h3>
+            <p data-copy="stackCardThreeBody">Notes and prior sessions can be searched semantically, turning the assistant into an accumulating operational system.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="spec-section">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="specEyebrow">Technical depth</div>
+          <h2 data-copy="specTitle">A product story backed by implementation details.</h2>
+        </div>
+        <div class="spec-grid">
+          <article class="spec-card">
+            <span data-copy="specOneLabel">Routing</span>
+            <strong data-copy="specOneTitle">Mode-aware model selection</strong>
+            <p data-copy="specOneBody">Agent requests are classified into code, visual, desktop, and business routes before model execution begins.</p>
+          </article>
+          <article class="spec-card">
+            <span data-copy="specTwoLabel">Execution</span>
+            <strong data-copy="specTwoTitle">Network-blocked sandbox</strong>
+            <p data-copy="specTwoBody">Generated scripts can run inside an isolated temporary workspace with network disabled and workspace writes prevented.</p>
+          </article>
+          <article class="spec-card">
+            <span data-copy="specThreeLabel">Memory</span>
+            <strong data-copy="specThreeTitle">Keyword plus semantic recall</strong>
+            <p data-copy="specThreeBody">Sessions and notes can now be recovered by semantic similarity, making prior work reusable instead of disposable.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="contact-section" id="contact">
+        <div class="contact-card">
+          <div class="eyebrow" data-copy="contactEyebrow">Launch offer</div>
+          <h2 data-copy="contactTitle">Ready for GitHub Pages, demos, and buyer conversations.</h2>
+          <p data-copy="contactBody">
+            Publish this folder through GitHub Pages, attach the desktop build, and use the bilingual site as the public product front while the repo keeps evolving.
+          </p>
+          <div class="contact-actions">
+            <a class="primary" href="mailto:hello@modai.app" data-copy="contactPrimary">Request a private walkthrough</a>
+            <a class="secondary" href="../README.md" data-copy="contactSecondary">Read the project README</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./site.js"></script>
+  </body>
+</html>
