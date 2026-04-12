@@ -29,7 +29,7 @@ export function createOllamaProvider(alias, providerConfig) {
             }
           }),
         ],
-      })
+      }, { timeoutMs: 120_000 })
 
       return {
         text: response.message?.content ?? '',

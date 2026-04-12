@@ -96,15 +96,19 @@
             <div class="session-list drawer-session-list" id="drawerSessionsPanel"></div>
           </section>
 
-          <section class="drawer-section" id="activityShell">
-            <div class="activity-header">
+          <section class="drawer-section" id="providersSection">
+            <div class="provider-section-head">
               <div>
-                <div class="section-title">Aktivite</div>
-                <div class="activity-summary" id="activitySummary">Arka plan aktivitesi yok</div>
+                <div class="section-title">Providers</div>
+                <div class="provider-section-copy">Yerel modeller, cloud baglantilari ve API key saklama akisi buradan yonetilir.</div>
               </div>
-              <button type="button" id="activityHeaderButton" class="text-button">Aktivite</button>
+              <div class="provider-tabs" id="providerTabList">
+                <button type="button" class="secondary provider-tab is-active" data-provider-tab="local">Local</button>
+                <button type="button" class="secondary provider-tab" data-provider-tab="cloud">Cloud</button>
+                <button type="button" class="secondary provider-tab" data-provider-tab="advanced">Advanced</button>
+              </div>
             </div>
-            <div class="activity-feed drawer-activity-feed" id="activityPanel"></div>
+            <div class="provider-list" id="providersPanel"></div>
           </section>
 
           <section class="drawer-section">
@@ -140,6 +144,13 @@
                 <span>Agent steps</span>
                 <input id="agentSteps" type="number" min="1" max="12" value="6" />
               </label>
+            </div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-title">Gorev Taslaklari</div>
+            <div class="drawer-subtitle">Otomatik taslak yalniz gorev planlama akisi icin kullanilir. Bilgisayar kontrol modu serbest komutla dogrudan calisir.</div>
+            <div class="field-grid">
               <label class="field inline-field">
                 <span>Otomatik sablonlar</span>
                 <input type="checkbox" id="templateToggle" checked />
@@ -148,36 +159,22 @@
                 <span>Gorev sablonu</span>
                 <input type="checkbox" id="taskTemplateToggle" checked />
               </label>
-              <label class="field inline-field">
-                <span>Masaustu sablonu</span>
-                <input type="checkbox" id="desktopTemplateToggle" checked />
-              </label>
               <label class="field">
                 <span>Gorev sablonu metni</span>
-                <textarea id="taskTemplateInput" rows="8"></textarea>
-              </label>
-              <label class="field">
-                <span>Bilgisayar sablonu metni</span>
-                <textarea id="desktopTemplateInput" rows="8"></textarea>
+                <textarea id="taskTemplateInput" rows="6"></textarea>
               </label>
             </div>
-            <div class="runtime-status" id="runtimeSummary">Runtime hazır</div>
-            <button type="button" id="saveSettingsButton" class="primary full-width">Ayarları Kaydet</button>
           </section>
 
-          <section class="drawer-section" id="providersSection">
-            <div class="provider-section-head">
+          <section class="drawer-section" id="activityShell">
+            <div class="activity-header">
               <div>
-                <div class="section-title">Providers</div>
-                <div class="provider-section-copy">Yerel modeller, cloud baglantilari ve gelismis endpoint ayarlari.</div>
+                <div class="section-title">Aktivite</div>
+                <div class="activity-summary" id="activitySummary">Arka plan aktivitesi yok</div>
               </div>
-              <div class="provider-tabs" id="providerTabList">
-                <button type="button" class="secondary provider-tab is-active" data-provider-tab="local">Local</button>
-                <button type="button" class="secondary provider-tab" data-provider-tab="cloud">Cloud</button>
-                <button type="button" class="secondary provider-tab" data-provider-tab="advanced">Advanced</button>
-              </div>
+              <button type="button" id="activityHeaderButton" class="text-button">Aktivite</button>
             </div>
-            <div class="provider-list" id="providersPanel"></div>
+            <div class="activity-feed drawer-activity-feed" id="activityPanel"></div>
           </section>
 
           <section class="drawer-section">
@@ -209,6 +206,11 @@
             <div class="section-title">Planlanmis Gorevler</div>
             <div class="notes-list" id="scheduledTasksPanel"></div>
           </section>
+        </div>
+
+        <div class="drawer-footer">
+          <div class="runtime-status" id="runtimeSummary">Runtime hazır</div>
+          <button type="button" id="saveSettingsButton" class="primary full-width">Ayarları Kaydet</button>
         </div>
       </aside>
 

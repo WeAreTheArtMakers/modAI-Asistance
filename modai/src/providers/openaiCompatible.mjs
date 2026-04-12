@@ -48,7 +48,7 @@ export function createOpenAICompatibleProvider(alias, providerConfig) {
           }),
         ],
         temperature: 0.2,
-      }, { headers })
+      }, { headers, timeoutMs: 120_000 })
 
       return {
         text: extractOpenAIText(response),
@@ -62,7 +62,7 @@ export function createOpenAICompatibleProvider(alias, providerConfig) {
         model: providerConfig.imageModel ?? model,
         prompt,
         size,
-      }, { headers })
+      }, { headers, timeoutMs: 120_000 })
 
       const image = response.data?.[0]
       if (!image) {

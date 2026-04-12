@@ -54,6 +54,7 @@ export function createAnthropicProvider(alias, providerConfig) {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
         },
+        timeoutMs: 120_000,
       })
 
       return {

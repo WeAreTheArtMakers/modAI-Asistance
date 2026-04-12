@@ -171,7 +171,7 @@ function bindEvents() {
   agentSteps.addEventListener('input', updateModelStatus)
   templateToggle.addEventListener('change', syncTemplateControls)
   taskTemplateToggle.addEventListener('change', syncTemplateControls)
-  desktopTemplateToggle.addEventListener('change', syncTemplateControls)
+  desktopTemplateToggle?.addEventListener('change', syncTemplateControls)
   approvalDenyButton.addEventListener('click', onApprovalDeny)
   approvalAllowOnceButton.addEventListener('click', () => handlePermissionApproval('once'))
   approvalAllowAlwaysButton.addEventListener('click', () => handlePermissionApproval('always'))
@@ -378,18 +378,26 @@ function renderComposerTemplateSettings(settings) {
   const templates = settings.composerTemplates ?? {}
   templateToggle.checked = templates.enabled !== false
   taskTemplateToggle.checked = templates.autoTaskTemplate !== false
-  desktopTemplateToggle.checked = templates.autoDesktopTemplate !== false
+  if (desktopTemplateToggle) {
+    desktopTemplateToggle.checked = templates.autoDesktopTemplate !== false
+  }
   taskTemplateInput.value = templates.taskTemplate ?? ''
-  desktopTemplateInput.value = templates.desktopTemplate ?? ''
+  if (desktopTemplateInput) {
+    desktopTemplateInput.value = templates.desktopTemplate ?? ''
+  }
   syncTemplateControls()
 }
 
 function syncTemplateControls() {
   const templatesEnabled = templateToggle.checked
   taskTemplateToggle.disabled = !templatesEnabled
-  desktopTemplateToggle.disabled = !templatesEnabled
+  if (desktopTemplateToggle) {
+    desktopTemplateToggle.disabled = !templatesEnabled
+  }
   taskTemplateInput.disabled = !templatesEnabled || !taskTemplateToggle.checked
-  desktopTemplateInput.disabled = !templatesEnabled || !desktopTemplateToggle.checked
+  if (desktopTemplateInput) {
+    desktopTemplateInput.disabled = !templatesEnabled || !(desktopTemplateToggle?.checked ?? true)
+  }
 }
 
 function renderPermissions(settings) {
@@ -832,7 +840,7 @@ function updateComposerAffordances() {
   }
 
   if (state.composerMode === 'desktop') {
-    promptInput.placeholder = 'Bilgisayarda uygulanacak aksiyonu yaz. Ornek: Chrome ac ve YouTube’da arama yap.'
+    promptInput.placeholder = 'Bilgisayarda uygulanacak aksiyonu dogrudan yaz. Ornek: Chrome ac ve YouTube’da Baran Gulesen ara.'
     sendButton.textContent = 'Uygula'
     return
   }
@@ -943,9 +951,7 @@ function buildModeSeed(mode) {
   }
 
   if (mode === 'desktop') {
-    return templates.autoDesktopTemplate === false
-      ? ''
-      : String(templates.desktopTemplate ?? '').trim()
+    return ''
   }
 
   return ''
@@ -1140,9 +1146,9 @@ function collectSettingsPatch() {
     composerTemplates: {
       enabled: templateToggle.checked,
       autoTaskTemplate: taskTemplateToggle.checked,
-      autoDesktopTemplate: desktopTemplateToggle.checked,
+      autoDesktopTemplate: desktopTemplateToggle?.checked ?? (state.settings?.composerTemplates?.autoDesktopTemplate !== false),
       taskTemplate: taskTemplateInput.value,
-      desktopTemplate: desktopTemplateInput.value,
+      desktopTemplate: desktopTemplateInput?.value ?? (state.settings?.composerTemplates?.desktopTemplate ?? ''),
     },
     permissions: {
       tools: Object.fromEntries(

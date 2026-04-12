@@ -45,6 +45,7 @@ export function createGeminiProvider(alias, providerConfig) {
             ],
           })),
         },
+        { timeoutMs: 120_000 },
       )
 
       return {

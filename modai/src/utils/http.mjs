@@ -20,7 +20,7 @@ export async function postJson(url, body, options = {}) {
 
 async function fetchWithTimeout(url, init) {
   const controller = new AbortController()
-  const timeoutMs = init.timeoutMs ?? 30_000
+  const timeoutMs = init.timeoutMs ?? 90_000
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
@@ -28,6 +28,11 @@ async function fetchWithTimeout(url, init) {
       ...init,
       signal: controller.signal,
     })
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)} seconds`)
+    }
+    throw error
   } finally {
     clearTimeout(timer)
   }
