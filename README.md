@@ -11,7 +11,7 @@ It combines:
 - session memory backed by SQLite
 - local-first workflows with Ollama as the default path
 
-The product is under active development. The current priority is a clean ChatGPT/Codex-style interface, reliable multimodal chat, and safe agent workflows that work both locally and on the web.
+The product is under active development. The current priority is a clean ChatGPT/Codex-style interface, reliable multimodal chat, safe computer-use flows, and a deployment path that works both locally and on the web.
 
 ## Status
 
@@ -54,10 +54,11 @@ Main directories:
 ### Chat
 
 - clean local chat UI
-- session history
+- session history with delete controls
 - image upload
 - model switching
-- theme support
+- English-first UI with Turkish language switch
+- light and dark theme support
 
 ### Agent flows
 
@@ -65,6 +66,7 @@ Main directories:
 - task mode enables planning + tools
 - desktop mode enables computer-use flows
 - permission prompts for sensitive actions
+- direct desktop shortcuts for common macOS actions
 
 ### Computer use
 
@@ -83,6 +85,7 @@ Main directories:
 - SQLite-backed session history
 - searchable notes
 - reusable context for future tasks
+- scheduled tasks with in-app reminders and chime alerts while the app is open
 
 ### Built-in skills
 
@@ -91,6 +94,17 @@ Main directories:
 - `chart-analyst`
 - `daily-operator`
 - `workday-planner`
+- `sales-outreach`
+- `content-repurposer`
+- `market-scan`
+- `meeting-prep`
+
+### Extensibility
+
+- install external skills directly from the Settings drawer
+- macOS Keychain storage for cloud provider API keys
+- local and cloud provider tabs with editable endpoints
+- project-level built-in skills in `.modai/skills`
 
 ## Local development
 
@@ -121,6 +135,28 @@ npm run doctor
 npm run models
 npm run cargo:check
 ```
+
+## Provider setup
+
+`modAI` defaults to a local Ollama path, but the desktop app can also connect to:
+
+- Gemini
+- Anthropic
+- OpenAI-compatible local servers such as LM Studio
+
+Cloud provider API keys can be saved inside the app and stored in macOS Keychain.
+
+## Scheduled task behavior
+
+Scheduled tasks are stored locally in SQLite and shown inside the Settings drawer.
+
+When the desktop app is open and a task reaches its due time, `modAI` will:
+
+- add an activity event
+- trigger a short in-app chime
+- show a system notification if notification permission has been granted
+
+This is currently an in-app reminder system, not a full background daemon.
 
 ## Ollama quick start
 
@@ -168,6 +204,7 @@ This application is intended to be fully open-source. The codebase is evolving q
 Current improvement tracks:
 
 - cleaner ChatGPT/Codex-grade UI
+- stronger language manager and future i18n support
 - better mobile layout
 - richer multimodal reasoning
 - safer tool orchestration

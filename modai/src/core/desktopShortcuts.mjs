@@ -39,7 +39,7 @@ export function createDesktopShortcut(content) {
         target: `https://www.youtube.com/results?search_query=${encodeURIComponent(youtubeQuery)}`,
         ...(chromeRequested ? { application: 'Google Chrome' } : {}),
       },
-      successMessage: `YouTube aramasi acildi: ${youtubeQuery}`,
+      successMessage: `Opened YouTube search: ${youtubeQuery}`,
     }
   }
 
@@ -50,7 +50,7 @@ export function createDesktopShortcut(content) {
         target: 'https://www.youtube.com',
         ...(chromeRequested ? { application: 'Google Chrome' } : {}),
       },
-      successMessage: 'YouTube acildi.',
+      successMessage: 'Opened YouTube.',
     }
   }
 
@@ -62,7 +62,7 @@ export function createDesktopShortcut(content) {
         target: `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}`,
         ...(chromeRequested ? { application: 'Google Chrome' } : {}),
       },
-      successMessage: `Tarayici aramasi acildi: ${googleQuery}`,
+      successMessage: `Opened browser search: ${googleQuery}`,
     }
   }
 
@@ -74,7 +74,7 @@ export function createDesktopShortcut(content) {
         target: urlMatch[0],
         ...(chromeRequested ? { application: 'Google Chrome' } : {}),
       },
-      successMessage: `Baglanti acildi: ${urlMatch[0]}`,
+      successMessage: `Opened link: ${urlMatch[0]}`,
     }
   }
 
@@ -84,7 +84,7 @@ export function createDesktopShortcut(content) {
       input: {
         application: 'Google Chrome',
       },
-      successMessage: 'Google Chrome acildi.',
+      successMessage: 'Opened Google Chrome.',
     }
   }
 
@@ -157,7 +157,7 @@ function parseStructuredFields(text) {
       continue
     }
 
-    const match = line.match(/^(Gorev|Görev|Amac|Amaç|Kisitlar|Kısıtlar|Teslim|Tamamlanma Kriteri)\s*:\s*(.*)$/i)
+    const match = line.match(/^(Gorev|Görev|Task|Amac|Amaç|Goal|Kisitlar|Kısıtlar|Constraints|Teslim|Due|Tamamlanma Kriteri|Completion Criteria)\s*:\s*(.*)$/i)
     if (!match) {
       continue
     }
@@ -171,16 +171,16 @@ function parseStructuredFields(text) {
 
 function normalizeFieldKey(value) {
   const normalized = String(value ?? '').toLowerCase()
-  if (normalized.startsWith('gorev') || normalized.startsWith('görev')) {
+  if (normalized.startsWith('gorev') || normalized.startsWith('görev') || normalized.startsWith('task')) {
     return 'gorev'
   }
-  if (normalized.startsWith('amac') || normalized.startsWith('amaç')) {
+  if (normalized.startsWith('amac') || normalized.startsWith('amaç') || normalized.startsWith('goal')) {
     return 'amac'
   }
-  if (normalized.startsWith('kisit') || normalized.startsWith('kısıt')) {
+  if (normalized.startsWith('kisit') || normalized.startsWith('kısıt') || normalized.startsWith('constraints')) {
     return 'kisitlar'
   }
-  if (normalized.startsWith('teslim')) {
+  if (normalized.startsWith('teslim') || normalized.startsWith('due')) {
     return 'teslim'
   }
   return 'tamamlanmaKriteri'
@@ -198,7 +198,7 @@ function deriveYoutubeQueryFromFields(fields) {
       candidate
         .replace(/\byoutube\b/gi, '')
         .replace(/\b(?:video(?:lari|ları|lari)?|videolarini|sonuclari|sonuçlari)\b/gi, '')
-        .replace(/\b(?:goster|göster|gelsin|gorunuyor|görünüyor|ac|aç|ziyaret et|izle|ara|arama|search|bul|bulmak|bulun)\b/gi, '')
+        .replace(/\b(?:goster|göster|gelsin|gorunuyor|görünüyor|ac|aç|ziyaret et|izle|ara|arama|search|bul|bulmak|bulun|find|show|open|visit|results|visible)\b/gi, '')
         .replace(/\b(?:olsun|gibi|icin|için)\b/gi, ''),
     )
 
@@ -231,8 +231,8 @@ function createFinderShortcut(text) {
       application: 'Finder',
     },
     successMessage: target.endsWith('/Downloads')
-      ? 'Finder Downloads klasorunu acti.'
-      : 'Finder acildi.',
+      ? 'Opened Finder to Downloads.'
+      : 'Opened Finder.',
   }
 }
 
@@ -250,6 +250,6 @@ function createScreenshotShortcut(text) {
     input: {
       path: targetPath,
     },
-    successMessage: `Ekran goruntusu kaydedildi: ${targetPath}`,
+    successMessage: `Saved screenshot: ${targetPath}`,
   }
 }

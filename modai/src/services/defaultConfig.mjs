@@ -1,7 +1,10 @@
 export function createDefaultConfig() {
   return {
-    version: 7,
+    version: 8,
     defaultModel: 'ollama:llama3.2',
+    language: {
+      active: 'en',
+    },
     assistant: {
       profile: 'business-copilot',
     },
@@ -118,6 +121,10 @@ export function mergeConfigWithDefaults(config = {}) {
       ...defaults.assistant,
       ...(config.assistant ?? {}),
     },
+    language: {
+      ...defaults.language,
+      ...(config.language ?? {}),
+    },
     mode: {
       ...defaults.mode,
       ...(config.mode ?? {}),
@@ -200,16 +207,16 @@ export function createDefaultComposerTemplates() {
     autoTaskTemplate: true,
     autoDesktopTemplate: true,
     taskTemplate: [
-      'Gorev: [ne yapilacak]',
-      'Amac: [istenen sonuc]',
-      'Kisitlar: [sinirlar, sure, araclar]',
-      'Teslim: [tarih veya cikti formati]',
+      'Task: [what should happen]',
+      'Goal: [desired outcome]',
+      'Constraints: [limits, time, tools]',
+      'Due: [date or output format]',
     ].join('\n'),
     desktopTemplate: [
-      'Gorev: [bilgisayarda yapilacak is]',
-      'Amac: [istenen sonuc]',
-      'Kisitlar: [uygulama, sinir, dikkat edilecekler]',
-      'Tamamlanma Kriteri: [tamamlanmis sayilma durumu]',
+      'Task: [computer action]',
+      'Goal: [desired outcome]',
+      'Constraints: [app, limits, watch-outs]',
+      'Completion Criteria: [what counts as done]',
     ].join('\n'),
   }
 }
@@ -253,5 +260,29 @@ function applyLegacyUpgrades(rawConfig, mergedConfig) {
 
   if (previousVersion < 7 && !rawConfig?.assistant?.profile) {
     mergedConfig.assistant.profile = 'business-copilot'
+  }
+
+  if (previousVersion < 8) {
+    if (rawConfig?.language?.active !== 'tr') {
+      mergedConfig.language.active = 'en'
+    }
+
+    const currentTemplates = rawConfig?.composerTemplates ?? {}
+
+    if (
+      typeof currentTemplates.taskTemplate !== 'string'
+      || currentTemplates.taskTemplate.startsWith('Gorev:')
+      || currentTemplates.taskTemplate.startsWith('Görev:')
+    ) {
+      mergedConfig.composerTemplates.taskTemplate = createDefaultComposerTemplates().taskTemplate
+    }
+
+    if (
+      typeof currentTemplates.desktopTemplate !== 'string'
+      || currentTemplates.desktopTemplate.startsWith('Gorev:')
+      || currentTemplates.desktopTemplate.startsWith('Görev:')
+    ) {
+      mergedConfig.composerTemplates.desktopTemplate = createDefaultComposerTemplates().desktopTemplate
+    }
   }
 }

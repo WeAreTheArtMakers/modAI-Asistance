@@ -58,6 +58,8 @@ function composeSystemPrompt({ modelRef, tools, platform, mode, assistantProfile
     tools,
     platform,
     assistantProfile,
+    now: new Date(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   })
 
   const pluginSection = activePlugins.length

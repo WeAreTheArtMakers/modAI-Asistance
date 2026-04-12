@@ -1,6 +1,7 @@
 const modeSelect = document.getElementById('modeSelect')
 const assistantProfileSelect = document.getElementById('assistantProfileSelect')
 const themeSelect = document.getElementById('themeSelect')
+const languageSelect = document.getElementById('languageSelect')
 const modelSelect = document.getElementById('modelSelect')
 const modelStatus = document.getElementById('modelStatus')
 const modeStatusBadge = document.getElementById('modeStatusBadge')
@@ -59,6 +60,10 @@ const taskModeButton = document.getElementById('taskModeButton')
 const desktopModeButton = document.getElementById('desktopModeButton')
 const attachmentStrip = document.getElementById('attachmentStrip')
 const composerExamples = document.getElementById('composerExamples')
+const skillNameInput = document.getElementById('skillNameInput')
+const skillDescriptionInput = document.getElementById('skillDescriptionInput')
+const skillContentInput = document.getElementById('skillContentInput')
+const installSkillButton = document.getElementById('installSkillButton')
 
 const state = {
   settings: null,
@@ -73,79 +78,346 @@ const state = {
   thinkingNode: null,
   providerTab: 'local',
   providerDrafts: {},
+  language: 'en',
+  reminderTimer: null,
+  remindedTaskIds: new Set(),
 }
 
-const MODE_LABELS = {
-  chat: 'Standart sohbet',
-  task: 'Görev modu',
-  desktop: 'Bilgisayar kontrolü',
-}
-
-const MODE_EXAMPLES = {
-  desktop: [
-    {
-      title: 'Chrome ve YouTube',
-      hint: 'Chrome acip YouTube arama sonucunu gosterir.',
-      prompt: [
-        'Gorev: Google Chrome ac ve YouTube ziyaret et',
-        'Amac: Baran Gulesen videolarini bulmak',
-        'Kisitlar: Yalnizca Google Chrome kullan, yeni bir sekmede ac',
-        'Tamamlanma Kriteri: YouTube sonuc sayfasi gorunuyor',
-      ].join('\n'),
-    },
-    {
-      title: 'Finder ve Downloads',
-      hint: 'Finder acip Downloads klasorune gider.',
-      prompt: [
-        'Gorev: Finder ac ve Downloads klasorunu goster',
-        'Amac: indirilen dosyalari kontrol etmek',
-        'Kisitlar: Sadece Finder kullan',
-        'Tamamlanma Kriteri: Downloads klasoru ekranda acik',
-      ].join('\n'),
-    },
-    {
-      title: 'Ekran goruntusu al',
-      hint: 'Ekran yakalar ve kaydeder.',
-      prompt: [
-        'Gorev: mevcut ekrandan ekran goruntusu al',
-        'Amac: acik pencerenin bir kopyasini kaydetmek',
-        'Kisitlar: dosyayi masaustune kaydet',
-        'Tamamlanma Kriteri: ekran goruntusu dosyasi olustu',
-      ].join('\n'),
-    },
-  ],
-  task: [
-    {
-      title: 'Sabah hatirlaticisi',
-      hint: 'Yarin sabah icin kisa bir hatirlatici kaydi olusturur.',
-      prompt: [
-        'Gorev: Sabah toplantisini hatirlat',
-        'Amac: yarin 09:00 toplantisini kacirmamak',
-        'Kisitlar: kisa ve net olsun',
-        `Teslim: ${formatDateTimeOffset(1, 9, 0)}`,
-      ].join('\n'),
-    },
-    {
-      title: 'Haftalik rapor gorevi',
-      hint: 'Bir rapor hazirlik gorevini planlar.',
-      prompt: [
-        'Gorev: Haftalik satis raporunu hazirla',
-        'Amac: cuma gunu paylasilacak ozeti hazir tutmak',
-        'Kisitlar: mevcut verilerle sinirli kal',
-        `Teslim: ${formatNextWeekdayDateTime(5, 18, 0)}`,
-      ].join('\n'),
-    },
-    {
-      title: 'Fatura hatirlaticisi',
-      hint: 'Duzensiz unutulan odemeler icin kullan.',
-      prompt: [
-        'Gorev: Elektrik faturasini hatirlat',
-        'Amac: son odeme tarihini kacirmamak',
-        'Kisitlar: odeme tutari bilinmiyorsa bos birak',
-        `Teslim: ${formatDateTimeOffset(3, 17, 0)}`,
-      ].join('\n'),
-    },
-  ],
+const I18N = {
+  en: {
+    brandEyebrow: 'modAI assistant',
+    newChat: 'New Chat',
+    chats: 'Chats',
+    localFirstChat: 'local-first chat',
+    activity: 'Activity',
+    settings: 'Settings',
+    attachImage: 'Attach Image',
+    newTask: 'New Task',
+    computerUse: 'Computer Use',
+    promptDefault: 'Message modAI. Attach images, create tasks, or run computer actions.',
+    controls: 'Controls',
+    settingsTitle: 'Settings and Tools',
+    settingsSubtitle: 'Manage providers, language, permissions, skills, and runtime behavior.',
+    close: 'Close',
+    panel: 'Panel',
+    mobilePanelCopy: 'On small screens, chats and settings are combined in this panel.',
+    providersLabel: 'Providers',
+    providersCopy: 'Manage local models, cloud providers, and API key storage.',
+    runtimeLabel: 'Runtime',
+    language: 'Language',
+    modeLabel: 'Mode',
+    copilotLabel: 'Copilot',
+    themeLabel: 'Theme',
+    agentModeLabel: 'Agent mode',
+    agentStepsLabel: 'Agent steps',
+    taskDrafts: 'Task Drafts',
+    taskDraftsCopy: 'Automatic drafts are only used for task planning. Computer Use accepts direct commands.',
+    autoTemplates: 'Automatic templates',
+    taskTemplate: 'Task template',
+    taskTemplateText: 'Task template text',
+    permissionsLabel: 'Permissions',
+    skillsLabel: 'Skills',
+    skillsCopy: 'Enable built-in skills or install external skills for new workflows.',
+    skillNameLabel: 'Skill name',
+    skillDescriptionLabel: 'Description',
+    skillContentLabel: 'Skill instructions',
+    skillNamePlaceholder: 'Sales follow-up',
+    skillDescriptionPlaceholder: 'Helps draft follow-up messages.',
+    skillContentPlaceholder: 'Describe when the skill should be used and what it should do.',
+    installSkill: 'Install Skill',
+    pluginsLabel: 'Plugins',
+    toolsLabel: 'Tools',
+    notesLabel: 'Notes',
+    scheduledTasks: 'Scheduled Tasks',
+    scheduledTasksCopy: 'Due tasks trigger an in-app reminder and a short chime while modAI is open.',
+    saveSettings: 'Save Settings',
+    runtimeReady: 'Runtime ready',
+    permissionRequest: 'Permission Request',
+    deny: 'Deny',
+    allowOnce: 'Allow Once',
+    allowAlways: 'Always Allow',
+    modelWaiting: 'Waiting for model',
+    workspaceReady: 'Workspace ready',
+    ready: 'Ready',
+    standardChat: 'Standard chat',
+    taskMode: 'Task mode',
+    computerControl: 'Computer control',
+    noProvidersTab: 'No providers to show in this tab.',
+    noSkills: 'No skills found.',
+    noPlugins: 'No plugins found.',
+    noSessions: 'No saved chats yet.',
+    noNotes: 'No notes yet.',
+    noTasks: 'No scheduled tasks.',
+    newSessionBadge: 'New session',
+    sessionActive: 'Session active',
+    noMessagesYet: 'No messages yet',
+    messagesLabel: 'messages',
+    workspaceLabel: 'Workspace',
+    modelNotSelected: 'No model selected',
+    runtimeWaiting: 'Runtime waiting',
+    noActiveModel: 'No active model',
+    readyShort: 'ready',
+    unavailableShort: 'unavailable',
+    online: 'online',
+    setupRequired: 'setup required',
+    businessCopilot: 'Business copilot',
+    generalAssistant: 'General assistant',
+    emptyBusinessTitle: 'Business Development Copilot ready.',
+    emptyBusinessBody: 'Describe your business, offer, revenue problem, or growth target. modAI will infer market context and respond with an operator-grade plan.',
+    emptyGeneralTitle: 'Clean local chat is ready.',
+    emptyGeneralBody: 'Past chats stay on the left. Image uploads, task planning, and computer control remain one tap away below the composer.',
+    providerSetupTitle: 'Provider Setup',
+    providerSetupBody: 'Fastest path: verify a local model first, then add cloud API keys if you need stronger models or vision.',
+    localSetup: 'Local Setup',
+    cloudSetup: 'Cloud Setup',
+    advanced: 'Advanced',
+    localSetupCopy: 'Ollama or a local OpenAI-compatible server',
+    cloudReady: 'Cloud side is ready',
+    cloudWaiting: '{count} API keys missing',
+    localLabel: 'Local',
+    cloudLabel: 'Cloud',
+    advancedLabel: 'Advanced',
+    you: 'You',
+    thinkingAgent: 'Planning tools and steps',
+    thinkingAnswer: 'Preparing response',
+    attachedImageSent: 'Attached image sent.',
+    toolRan: '{tool} ran',
+    toolNeedsPermission: '{tool} needs approval',
+    protocolError: 'Agent protocol error',
+    toolFailed: '{tool} failed',
+    toolDone: '{tool} completed',
+    noActivity: 'No background activity',
+    activityRecords: 'Record {count}',
+    activityEmpty: 'No activity yet.',
+    actionsSummary: '{count} actions',
+    actionsWithErrors: '{count} actions · {errors} errors',
+    actionsWithWarnings: '{count} actions · {warnings} approvals',
+    actionsWithAll: '{count} actions · {errors} errors · {warnings} approvals',
+    taskPlaceholder: 'Write the task details. If templates are enabled, the task draft will be inserted automatically.',
+    desktopPlaceholder: 'Write the computer action directly. Example: Open Chrome and search YouTube for Baran Gulesen.',
+    readyComputerFlows: 'Ready computer flows',
+    readyTaskTemplates: 'Ready task templates',
+    remove: 'Remove',
+    imageUploading: 'Uploading image...',
+    imagesAdded: '{count} image added',
+    settingsSaving: 'Saving settings...',
+    settingsSaved: 'Settings saved',
+    deleteChatConfirm: 'Delete this saved chat?',
+    deleteTaskConfirm: 'Delete this scheduled task?',
+    deletingChat: 'Deleting chat...',
+    deletedChat: 'Chat deleted',
+    deletingTask: 'Deleting task...',
+    deletedTask: 'Task deleted',
+    loadingChat: 'Loading chat...',
+    loadedChat: 'Chat loaded · {model}',
+    error: 'Error',
+    permissionNeeded: 'Approval required',
+    permissionDenied: 'Approval denied',
+    save: 'Save',
+    run: 'Run',
+    noVisionModel: 'No vision-capable model is available for this image.',
+    visionSelected: 'Vision model selected · {model}',
+    newChatReady: 'New chat ready',
+    delete: 'Delete',
+    due: 'Due',
+    draft: 'Draft',
+    scheduled: 'Scheduled',
+    dueSoon: 'Due soon',
+    overdue: 'Overdue',
+    reminderTriggered: 'Reminder triggered · {title}',
+    reminderTitle: 'Task due',
+    reminderBody: '{title} is due now.',
+    providerReady: 'ready',
+    providerSetup: 'setup',
+    baseUrl: 'Base URL',
+    apiKey: 'API key',
+    macKeychain: 'macOS Keychain',
+    environmentVariable: 'environment variable',
+    envOrEmpty: 'environment variable or empty',
+    clearStoredKey: 'Clear stored key',
+    keyWillClear: 'Stored key will be cleared',
+    leaveBlank: 'Leave blank to keep the current key.',
+    secretStorageTitle: 'Secret storage',
+    secretStorageCopy: 'Cloud provider keys can be stored in macOS Keychain. Environment variables remain a fallback.',
+    groupsTitle: 'Groups',
+    groupsCopy: '{local} local providers, {cloud} cloud providers defined.',
+    advancedNoteTitle: 'Advanced note',
+    advancedNoteCopy: 'Edit Base URL values in Local and Cloud. This panel summarizes storage and connection behavior.',
+    advancedNoteHint: 'Save cloud keys inside the app, then verify local endpoints before switching models.',
+    overview: 'overview',
+    customEndpoints: 'custom endpoints',
+    installSkillBusy: 'Installing skill...',
+    installSkillDone: 'Skill installed',
+    skillContentRequired: 'Skill content is required.',
+    noteCategory: 'general',
+  },
+  tr: {
+    brandEyebrow: 'modAI asistanı',
+    newChat: 'Yeni Sohbet',
+    chats: 'Sohbetler',
+    localFirstChat: 'yerel öncelikli sohbet',
+    activity: 'Aktivite',
+    settings: 'Ayarlar',
+    attachImage: 'Görsel Ekle',
+    newTask: 'Görev Ver',
+    computerUse: 'Bilgisayarı Kullan',
+    promptDefault: 'modAI\'ye yaz. Görsel ekleyebilir, görev oluşturabilir veya bilgisayar aksiyonları çalıştırabilirsin.',
+    controls: 'Kontroller',
+    settingsTitle: 'Ayarlar ve Araçlar',
+    settingsSubtitle: 'Provider, dil, izin, skill ve çalışma ayarlarını buradan yönet.',
+    close: 'Kapat',
+    panel: 'Panel',
+    mobilePanelCopy: 'Küçük ekranlarda sohbetler ve ayarlar bu panelde birleşir.',
+    providersLabel: 'Providerlar',
+    providersCopy: 'Yerel modelleri, cloud providerları ve API anahtarlarını yönet.',
+    runtimeLabel: 'Çalışma Modu',
+    language: 'Dil',
+    modeLabel: 'Mod',
+    copilotLabel: 'Kopilot',
+    themeLabel: 'Tema',
+    agentModeLabel: 'Ajan modu',
+    agentStepsLabel: 'Ajan adımı',
+    taskDrafts: 'Görev Taslakları',
+    taskDraftsCopy: 'Otomatik taslaklar yalnız görev planlama için kullanılır. Bilgisayarı Kullan doğrudan komut kabul eder.',
+    autoTemplates: 'Otomatik şablonlar',
+    taskTemplate: 'Görev şablonu',
+    taskTemplateText: 'Görev şablon metni',
+    permissionsLabel: 'İzinler',
+    skillsLabel: 'Skilller',
+    skillsCopy: 'Yerleşik skillleri etkinleştir veya yeni akışlar için dış skill yükle.',
+    skillNameLabel: 'Skill adı',
+    skillDescriptionLabel: 'Açıklama',
+    skillContentLabel: 'Skill talimatları',
+    skillNamePlaceholder: 'Satış takibi',
+    skillDescriptionPlaceholder: 'Takip mesajları yazmaya yardım eder.',
+    skillContentPlaceholder: 'Skillin ne zaman kullanılacağını ve ne yapacağını yaz.',
+    installSkill: 'Skill Yükle',
+    pluginsLabel: 'Pluginler',
+    toolsLabel: 'Araçlar',
+    notesLabel: 'Notlar',
+    scheduledTasks: 'Planlanmış Görevler',
+    scheduledTasksCopy: 'modAI açıkken zamanı gelen görevler uygulama içi bildirim ve kısa bir zil sesi üretir.',
+    saveSettings: 'Ayarları Kaydet',
+    runtimeReady: 'Çalışma ortamı hazır',
+    permissionRequest: 'İzin İsteği',
+    deny: 'Reddet',
+    allowOnce: 'Bir Kez İzin Ver',
+    allowAlways: 'Her Zaman İzin Ver',
+    modelWaiting: 'Model bekleniyor',
+    workspaceReady: 'Workspace hazır',
+    ready: 'Hazır',
+    standardChat: 'Standart sohbet',
+    taskMode: 'Görev modu',
+    computerControl: 'Bilgisayar kontrolü',
+    noProvidersTab: 'Bu sekmede gösterilecek provider yok.',
+    noSkills: 'Skill bulunamadı.',
+    noPlugins: 'Plugin bulunamadı.',
+    noSessions: 'Henüz kayıtlı sohbet yok.',
+    noNotes: 'Henüz not yok.',
+    noTasks: 'Planlanmış görev yok.',
+    newSessionBadge: 'Yeni session',
+    sessionActive: 'Session aktif',
+    noMessagesYet: 'Henüz mesaj yok',
+    messagesLabel: 'mesaj',
+    workspaceLabel: 'Workspace',
+    modelNotSelected: 'Model seçilmedi',
+    runtimeWaiting: 'Çalışma ortamı beklemede',
+    noActiveModel: 'Aktif model yok',
+    readyShort: 'hazır',
+    unavailableShort: 'kullanılamıyor',
+    online: 'çevrimiçi',
+    setupRequired: 'kurulum gerekli',
+    businessCopilot: 'İş kopilotu',
+    generalAssistant: 'Genel asistan',
+    emptyBusinessTitle: 'İş geliştirme kopilotu hazır.',
+    emptyBusinessBody: 'İşini, teklifini, gelir problemini veya büyüme hedefini yaz. modAI pazar bağlamını çıkarıp operasyon odaklı bir plan sunar.',
+    emptyGeneralTitle: 'Temiz yerel sohbet hazır.',
+    emptyGeneralBody: 'Eski sohbetler solda kalır. Görsel, görev ve bilgisayar akışları yazma alanının altında durur.',
+    providerSetupTitle: 'Provider Kurulumu',
+    providerSetupBody: 'En hızlı akış: önce yerel modeli doğrula, sonra gerekirse cloud API anahtarlarını ekle.',
+    localSetup: 'Yerel Kurulum',
+    cloudSetup: 'Cloud Kurulumu',
+    advanced: 'Gelişmiş',
+    localSetupCopy: 'Ollama veya yerel OpenAI uyumlu sunucu',
+    cloudReady: 'Cloud tarafı hazır',
+    cloudWaiting: '{count} API anahtarı eksik',
+    localLabel: 'Yerel',
+    cloudLabel: 'Cloud',
+    advancedLabel: 'Gelişmiş',
+    you: 'Sen',
+    thinkingAgent: 'Araçları ve adımları planlıyor',
+    thinkingAnswer: 'Yanıt hazırlanıyor',
+    attachedImageSent: 'Ekli görsel gönderildi.',
+    toolRan: '{tool} çalıştı',
+    toolNeedsPermission: '{tool} izin bekliyor',
+    protocolError: 'Ajan protokol hatası',
+    toolFailed: '{tool} hata verdi',
+    toolDone: '{tool} tamamlandı',
+    noActivity: 'Arka plan aktivitesi yok',
+    activityRecords: 'Kayıt {count}',
+    activityEmpty: 'Henüz aktivite kaydı yok.',
+    actionsSummary: '{count} aksiyon',
+    actionsWithErrors: '{count} aksiyon · {errors} hata',
+    actionsWithWarnings: '{count} aksiyon · {warnings} izin',
+    actionsWithAll: '{count} aksiyon · {errors} hata · {warnings} izin',
+    taskPlaceholder: 'Görev detaylarını yaz. Şablonlar açıksa görev taslağı otomatik eklenir.',
+    desktopPlaceholder: 'Bilgisayarda yapılacak aksiyonu doğrudan yaz. Örnek: Chrome aç ve YouTube’da Baran Gulesen ara.',
+    readyComputerFlows: 'Hazır bilgisayar akışları',
+    readyTaskTemplates: 'Hazır görev şablonları',
+    remove: 'Kaldır',
+    imageUploading: 'Görsel yükleniyor...',
+    imagesAdded: '{count} görsel eklendi',
+    settingsSaving: 'Ayarlar kaydediliyor...',
+    settingsSaved: 'Ayarlar kaydedildi',
+    deleteChatConfirm: 'Bu sohbet kaydı silinsin mi?',
+    deleteTaskConfirm: 'Bu planlanmış görev silinsin mi?',
+    deletingChat: 'Sohbet siliniyor...',
+    deletedChat: 'Sohbet silindi',
+    deletingTask: 'Görev siliniyor...',
+    deletedTask: 'Görev silindi',
+    loadingChat: 'Sohbet yükleniyor...',
+    loadedChat: 'Sohbet yüklendi · {model}',
+    error: 'Hata',
+    permissionNeeded: 'İzin gerekiyor',
+    permissionDenied: 'İzin reddedildi',
+    save: 'Kaydet',
+    run: 'Uygula',
+    noVisionModel: 'Bu görsel için vision destekli bir model bulunamadı.',
+    visionSelected: 'Vision modeli seçildi · {model}',
+    newChatReady: 'Yeni sohbet hazır',
+    delete: 'Sil',
+    due: 'Teslim',
+    draft: 'Taslak',
+    scheduled: 'Planlandı',
+    dueSoon: 'Yaklaşıyor',
+    overdue: 'Gecikti',
+    reminderTriggered: 'Hatırlatma tetiklendi · {title}',
+    reminderTitle: 'Görev zamanı geldi',
+    reminderBody: '{title} görevinin zamanı geldi.',
+    providerReady: 'hazır',
+    providerSetup: 'kurulum',
+    baseUrl: 'Base URL',
+    apiKey: 'API anahtarı',
+    macKeychain: 'macOS Keychain',
+    environmentVariable: 'ortam değişkeni',
+    envOrEmpty: 'ortam değişkeni veya boş',
+    clearStoredKey: 'Kayıtlı anahtarı temizle',
+    keyWillClear: 'Anahtar temizlenecek',
+    leaveBlank: 'Boş bırakırsan mevcut anahtar korunur.',
+    secretStorageTitle: 'Gizli Anahtar Saklama',
+    secretStorageCopy: 'Cloud provider anahtarları macOS Keychain içinde saklanabilir. Ortam değişkenleri yedek olarak çalışır.',
+    groupsTitle: 'Gruplar',
+    groupsCopy: '{local} yerel provider, {cloud} cloud provider tanımlı.',
+    advancedNoteTitle: 'Gelişmiş not',
+    advancedNoteCopy: 'Base URL alanları Yerel ve Cloud sekmelerinde düzenlenir. Bu panel saklama ve bağlantı davranışını özetler.',
+    advancedNoteHint: 'Cloud anahtarlarını uygulama içinden kaydet, sonra model değiştirmeden önce yerel endpointleri doğrula.',
+    overview: 'özet',
+    customEndpoints: 'özel endpointler',
+    installSkillBusy: 'Skill yükleniyor...',
+    installSkillDone: 'Skill yüklendi',
+    skillContentRequired: 'Skill içeriği gerekli.',
+    noteCategory: 'genel',
+  },
 }
 
 boot().catch(showError)
@@ -156,7 +428,8 @@ async function boot() {
   renderConversation()
   renderActivity()
   renderComposerContext()
-  setBusy(false, 'Hazır')
+  startReminderLoop()
+  setBusy(false, t('ready'))
 }
 
 function bindEvents() {
@@ -165,6 +438,10 @@ function bindEvents() {
   clearButton.addEventListener('click', onClear)
   modelSelect.addEventListener('change', updateModelStatus)
   modeSelect.addEventListener('change', updateModelStatus)
+  languageSelect.addEventListener('change', () => {
+    state.language = languageSelect.value
+    applyTranslations()
+  })
   assistantProfileSelect.addEventListener('change', renderAssistantProfileBadges)
   themeSelect.addEventListener('change', () => applyTheme(themeSelect.value))
   agentToggle.addEventListener('change', updateModelStatus)
@@ -177,6 +454,7 @@ function bindEvents() {
   approvalAllowAlwaysButton.addEventListener('click', () => handlePermissionApproval('always'))
   memorySessionsPanel.addEventListener('click', onSessionCardClick)
   drawerSessionsPanel.addEventListener('click', onSessionCardClick)
+  scheduledTasksPanel.addEventListener('click', onScheduledTasksClick)
   providersPanel.addEventListener('click', onProviderPanelClick)
   providersPanel.addEventListener('input', onProviderPanelInput)
   providerTabList.addEventListener('click', onProviderTabClick)
@@ -193,6 +471,7 @@ function bindEvents() {
   attachmentStrip.addEventListener('click', onAttachmentStripClick)
   composerExamples.addEventListener('click', onComposerExamplesClick)
   messages.addEventListener('click', onMessageAreaClick)
+  installSkillButton.addEventListener('click', onInstallSkill)
   promptInput.addEventListener('input', resizeComposerInput)
   promptInput.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -202,6 +481,307 @@ function bindEvents() {
   })
 }
 
+function uiLanguage() {
+  return languageSelect?.value || state.language || state.settings?.language?.active || 'en'
+}
+
+function localeForUi() {
+  return uiLanguage() === 'tr' ? 'tr-TR' : 'en-US'
+}
+
+function t(key, variables = {}) {
+  const dictionary = I18N[uiLanguage()] ?? I18N.en
+  const fallback = I18N.en[key] ?? key
+  const template = dictionary[key] ?? fallback
+  return Object.entries(variables).reduce(
+    (output, [name, value]) => output.replaceAll(`{${name}}`, String(value)),
+    template,
+  )
+}
+
+function applyTranslations() {
+  document.documentElement.lang = uiLanguage()
+
+  for (const node of document.querySelectorAll('[data-i18n]')) {
+    const key = node.dataset.i18n
+    if (key) {
+      node.textContent = t(key)
+    }
+  }
+
+  for (const node of document.querySelectorAll('[data-i18n-placeholder]')) {
+    const key = node.dataset.i18nPlaceholder
+    if (key) {
+      node.placeholder = t(key)
+    }
+  }
+
+  for (const button of providerTabList.querySelectorAll('[data-provider-tab]')) {
+    const key = button.dataset.providerTab === 'local'
+      ? 'localLabel'
+      : button.dataset.providerTab === 'cloud'
+        ? 'cloudLabel'
+        : 'advancedLabel'
+    button.textContent = t(key)
+  }
+
+  const themeLabels = {
+    auto: 'Auto',
+    light: uiLanguage() === 'tr' ? 'Açık' : 'Light',
+    dark: uiLanguage() === 'tr' ? 'Koyu' : 'Dark',
+  }
+  for (const option of themeSelect.options) {
+    option.textContent = themeLabels[option.value] ?? option.value
+  }
+
+  const modeLabels = {
+    ultra: 'Ultra Light',
+    pro: 'Pro',
+  }
+  for (const option of modeSelect.options) {
+    option.textContent = modeLabels[option.value] ?? option.value
+  }
+
+  for (const option of assistantProfileSelect.options) {
+    option.textContent = option.value === 'business-copilot'
+      ? (uiLanguage() === 'tr' ? 'İş Kopilotu' : 'Business Copilot')
+      : (uiLanguage() === 'tr' ? 'Genel Asistan' : 'General Assistant')
+  }
+
+  updateSessionIndicators()
+  renderAssistantProfileBadges()
+  updateModelStatus()
+  renderComposerContext()
+  renderActivity()
+  renderConversation()
+}
+
+function getModeLabels() {
+  return {
+    chat: t('standardChat'),
+    task: t('taskMode'),
+    desktop: t('computerControl'),
+  }
+}
+
+function buildModeExamples(language = uiLanguage()) {
+  if (language === 'tr') {
+    return {
+      desktop: [
+        {
+          title: 'Chrome ve YouTube',
+          hint: 'Chrome açıp YouTube arama sonucunu gösterir.',
+          prompt: [
+            'Gorev: Google Chrome ac ve YouTube ziyaret et',
+            'Amac: Baran Gulesen videolarini bulmak',
+            'Kisitlar: Yalnizca Google Chrome kullan, yeni bir sekmede ac',
+            'Tamamlanma Kriteri: YouTube sonuc sayfasi gorunuyor',
+          ].join('\n'),
+        },
+        {
+          title: 'Finder ve Downloads',
+          hint: 'Finder açıp Downloads klasörüne gider.',
+          prompt: [
+            'Gorev: Finder ac ve Downloads klasorunu goster',
+            'Amac: indirilen dosyalari kontrol etmek',
+            'Kisitlar: Sadece Finder kullan',
+            'Tamamlanma Kriteri: Downloads klasoru ekranda acik',
+          ].join('\n'),
+        },
+        {
+          title: 'Ekran görüntüsü',
+          hint: 'Ekranı yakalar ve masaüstüne kaydeder.',
+          prompt: [
+            'Gorev: mevcut ekrandan ekran goruntusu al',
+            'Amac: acik pencerenin bir kopyasini kaydetmek',
+            'Kisitlar: dosyayi masaustune kaydet',
+            'Tamamlanma Kriteri: ekran goruntusu dosyasi olustu',
+          ].join('\n'),
+        },
+        {
+          title: 'Chrome ile URL aç',
+          hint: 'Google Chrome içinde belirli bir siteyi açar.',
+          prompt: [
+            'Gorev: Google Chrome ac ve https://openai.com sayfasini ziyaret et',
+            'Amac: resmi siteyi kontrol etmek',
+            'Kisitlar: yalnizca Google Chrome kullan',
+            'Tamamlanma Kriteri: sayfa Chrome icinde acildi',
+          ].join('\n'),
+        },
+        {
+          title: 'Finder aç',
+          hint: 'Finder uygulamasını ön plana getirir.',
+          prompt: [
+            'Gorev: Finder ac',
+            'Amac: dosyalari gezmeye baslamak',
+            'Kisitlar: yalnizca Finder kullan',
+            'Tamamlanma Kriteri: Finder acik ve odakta',
+          ].join('\n'),
+        },
+      ],
+      task: [
+        {
+          title: 'Sabah hatırlatıcısı',
+          hint: 'Yarın sabah için kısa bir hatırlatıcı kaydı oluşturur.',
+          prompt: [
+            'Gorev: Sabah toplantisini hatirlat',
+            'Amac: yarin 09:00 toplantisini kacirmamak',
+            'Kisitlar: kisa ve net olsun',
+            `Teslim: ${formatDateTimeOffset(1, 9, 0)}`,
+          ].join('\n'),
+        },
+        {
+          title: 'Haftalık rapor',
+          hint: 'Bir rapor hazırlık görevini planlar.',
+          prompt: [
+            'Gorev: Haftalik satis raporunu hazirla',
+            'Amac: cuma gunu paylasilacak ozeti hazir tutmak',
+            'Kisitlar: mevcut verilerle sinirli kal',
+            `Teslim: ${formatNextWeekdayDateTime(5, 18, 0)}`,
+          ].join('\n'),
+        },
+        {
+          title: 'Fatura hatırlat',
+          hint: 'Sık unutulan ödemeler için kullan.',
+          prompt: [
+            'Gorev: Elektrik faturasini hatirlat',
+            'Amac: son odeme tarihini kacirmamak',
+            'Kisitlar: odeme tutari bilinmiyorsa bos birak',
+            `Teslim: ${formatDateTimeOffset(3, 17, 0)}`,
+          ].join('\n'),
+        },
+        {
+          title: 'İçerik yayınla',
+          hint: 'Yaratıcı ekipler için yayın tarihini sabitler.',
+          prompt: [
+            'Gorev: YouTube videosunu yayinlamayi hatirlat',
+            'Amac: yarin 20:00 yayina cikmak',
+            'Kisitlar: kisa hatirlatici olsun',
+            `Teslim: ${formatDateTimeOffset(1, 20, 0)}`,
+          ].join('\n'),
+        },
+        {
+          title: 'Müşteri takibi',
+          hint: 'Lead takipleri için görev oluşturur.',
+          prompt: [
+            'Gorev: Soguk lead takibini yap',
+            'Amac: pazartesi 10:30 geri donusleri toplamak',
+            'Kisitlar: sadece kisa hatirlatici olustur',
+            `Teslim: ${formatNextWeekdayDateTime(1, 10, 30)}`,
+          ].join('\n'),
+        },
+      ],
+    }
+  }
+
+  return {
+    desktop: [
+      {
+        title: 'Chrome + YouTube',
+        hint: 'Opens Chrome and shows a YouTube search result.',
+        prompt: [
+          'Task: Open Google Chrome and visit YouTube',
+          'Goal: find Baran Gulesen videos',
+          'Constraints: only use Google Chrome, open it in a new tab',
+          'Completion Criteria: YouTube search results are visible',
+        ].join('\n'),
+      },
+      {
+        title: 'Finder + Downloads',
+        hint: 'Opens Finder and shows the Downloads folder.',
+        prompt: [
+          'Task: Open Finder and show the Downloads folder',
+          'Goal: review downloaded files',
+          'Constraints: only use Finder',
+          'Completion Criteria: the Downloads folder is visible on screen',
+        ].join('\n'),
+      },
+      {
+        title: 'Take screenshot',
+        hint: 'Captures the current screen and saves it on the Desktop.',
+        prompt: [
+          'Task: Capture a screenshot of the current screen',
+          'Goal: save a copy of the open window',
+          'Constraints: save the file on the Desktop',
+          'Completion Criteria: the screenshot file exists',
+        ].join('\n'),
+      },
+      {
+        title: 'Open URL in Chrome',
+        hint: 'Launches a specific URL in Google Chrome.',
+        prompt: [
+          'Task: Open Google Chrome and visit https://openai.com',
+          'Goal: review the official website',
+          'Constraints: only use Google Chrome',
+          'Completion Criteria: the page is open in Chrome',
+        ].join('\n'),
+      },
+      {
+        title: 'Bring Finder forward',
+        hint: 'Focuses Finder for quick file navigation.',
+        prompt: [
+          'Task: Open Finder',
+          'Goal: start browsing files',
+          'Constraints: only use Finder',
+          'Completion Criteria: Finder is visible and focused',
+        ].join('\n'),
+      },
+    ],
+    task: [
+      {
+        title: 'Morning reminder',
+        hint: 'Creates a short reminder for tomorrow morning.',
+        prompt: [
+          'Task: Remind me about the morning meeting',
+          'Goal: avoid missing tomorrow at 09:00',
+          'Constraints: keep it short and direct',
+          `Due: ${formatDateTimeOffset(1, 9, 0)}`,
+        ].join('\n'),
+      },
+      {
+        title: 'Weekly report',
+        hint: 'Plans a reminder for the weekly report deadline.',
+        prompt: [
+          'Task: Prepare the weekly sales report',
+          'Goal: keep the summary ready for Friday sharing',
+          'Constraints: stay within the current data',
+          `Due: ${formatNextWeekdayDateTime(5, 18, 0)}`,
+        ].join('\n'),
+      },
+      {
+        title: 'Bill reminder',
+        hint: 'Useful for recurring payments you often forget.',
+        prompt: [
+          'Task: Remind me about the electricity bill',
+          'Goal: avoid missing the due date',
+          'Constraints: leave the amount blank if unknown',
+          `Due: ${formatDateTimeOffset(3, 17, 0)}`,
+        ].join('\n'),
+      },
+      {
+        title: 'Publish content',
+        hint: 'Useful for creators with a fixed publishing window.',
+        prompt: [
+          'Task: Remind me to publish the YouTube video',
+          'Goal: go live tomorrow at 20:00',
+          'Constraints: keep the reminder short',
+          `Due: ${formatDateTimeOffset(1, 20, 0)}`,
+        ].join('\n'),
+      },
+      {
+        title: 'Client follow-up',
+        hint: 'Creates a follow-up reminder for active leads.',
+        prompt: [
+          'Task: Follow up with the warm leads',
+          'Goal: review replies on Monday at 10:30',
+          'Constraints: create only a short reminder',
+          `Due: ${formatNextWeekdayDateTime(1, 10, 30)}`,
+        ].join('\n'),
+      },
+    ],
+  }
+}
+
 async function refreshSettings() {
   const settings = await fetchJson('/api/settings')
   state.settings = settings
@@ -209,15 +789,18 @@ async function refreshSettings() {
 }
 
 function renderSettings(settings) {
+  state.language = settings.language?.active ?? 'en'
   if (!state.providerTab || !isValidProviderTab(state.providerTab)) {
     state.providerTab = getDefaultProviderTab(settings)
   }
   state.providerDrafts = createProviderDrafts(settings.providers ?? [])
+  languageSelect.value = state.language
   modeSelect.value = settings.mode?.active ?? 'pro'
   assistantProfileSelect.value = settings.assistant?.profile ?? 'business-copilot'
   const theme = settings.theme?.active ?? 'auto'
   themeSelect.value = theme
   applyTheme(theme)
+  applyTranslations()
   renderModels(settings)
   renderProviders(settings)
   renderAgent(settings)
@@ -241,7 +824,7 @@ function renderModels(settings) {
     option.value = model.id
     option.textContent = model.available
       ? `${model.id}`
-      : `${model.id} · unavailable`
+      : `${model.id} · ${t('unavailableShort')}`
     option.disabled = !model.available
     if (model.id === settings.defaultModel) {
       option.selected = true
@@ -262,7 +845,7 @@ function renderProviders(settings) {
   const visibleProviders = providers.filter(provider => provider.group === state.providerTab)
   providersPanel.innerHTML = visibleProviders.length
     ? visibleProviders.map(renderProviderCardMarkup).join('')
-    : '<div class="empty-card">Bu sekmede goruntulenecek provider yok.</div>'
+    : `<div class="empty-card">${escapeHtml(t('noProvidersTab'))}</div>`
 }
 
 function renderProviderTabs() {
@@ -280,25 +863,25 @@ function renderProviderCardMarkup(provider) {
     clearApiKey: false,
   }
   const storageLabel = provider.secretStorage === 'keychain'
-    ? 'macOS Keychain'
+    ? t('macKeychain')
     : provider.secretStorage === 'env'
-      ? 'ortam degiskeni'
+      ? t('environmentVariable')
     : provider.hasStoredApiKey
-      ? 'uygulama config'
-      : 'ortam degiskeni veya bos'
+      ? 'app config'
+      : t('envOrEmpty')
 
   return `
     <article class="provider-card ${provider.available ? 'ok' : 'warn'}">
       <div class="provider-head">
         <strong>${escapeHtml(provider.id)}</strong>
-        <span class="provider-pill">${provider.available ? 'ready' : 'setup'}</span>
+        <span class="provider-pill">${provider.available ? escapeHtml(t('providerReady')) : escapeHtml(t('providerSetup'))}</span>
       </div>
       <div class="provider-meta">${escapeHtml(provider.type)}${provider.baseUrl ? ` · ${escapeHtml(provider.baseUrl)}` : ''}</div>
       <div class="provider-status">${escapeHtml(provider.availabilityMessage)}</div>
       <div class="provider-hint">${escapeHtml(provider.setupHint || '')}</div>
       <div class="provider-config">
         <label class="field compact-field">
-          <span>Base URL</span>
+          <span>${escapeHtml(t('baseUrl'))}</span>
           <input
             type="text"
             data-provider-base-url="${escapeHtml(provider.id)}"
@@ -308,7 +891,7 @@ function renderProviderCardMarkup(provider) {
         </label>
         ${supportsApiKey ? `
           <label class="field compact-field">
-            <span>API key ${provider.hasCredential ? `· ${escapeHtml(storageLabel)}` : ''}</span>
+            <span>${escapeHtml(t('apiKey'))} ${provider.hasCredential ? `· ${escapeHtml(storageLabel)}` : ''}</span>
             <input
               type="password"
               data-provider-api-key="${escapeHtml(provider.id)}"
@@ -326,8 +909,8 @@ function renderProviderCardMarkup(provider) {
             type="button"
             class="secondary provider-inline-button"
             data-provider-clear-key="${escapeHtml(provider.id)}"
-          >${draft.clearApiKey ? "Key temizlenecek" : "Kayitli key'i temizle"}</button>
-          <span class="provider-inline-note">Bos birakirsan mevcut key korunur.</span>
+          >${draft.clearApiKey ? escapeHtml(t('keyWillClear')) : escapeHtml(t('clearStoredKey'))}</button>
+          <span class="provider-inline-note">${escapeHtml(t('leaveBlank'))}</span>
         </div>
       ` : ''}
       ${discoveredModels ? `<div class="provider-models">${escapeHtml(discoveredModels)}</div>` : ''}
@@ -344,27 +927,27 @@ function renderAdvancedProviderPanel(providers) {
   return `
     <article class="provider-card">
       <div class="provider-head">
-        <strong>Secret storage</strong>
+        <strong>${escapeHtml(t('secretStorageTitle'))}</strong>
         <span class="provider-pill">${keychainCount ? 'keychain' : 'env/config'}</span>
       </div>
-      <div class="provider-status">Cloud provider key'leri macOS Keychain icinde saklanabilir. Ortam degiskenleri fallback olarak calismaya devam eder.</div>
-      <div class="provider-models">${escapeHtml(`${keychainCount} keychain, ${missingKeys} setup bekliyor`)}</div>
+      <div class="provider-status">${escapeHtml(t('secretStorageCopy'))}</div>
+      <div class="provider-models">${escapeHtml(`${keychainCount} keychain, ${missingKeys} ${t('providerSetup')}`)}</div>
     </article>
     <article class="provider-card">
       <div class="provider-head">
-        <strong>Gruplar</strong>
-        <span class="provider-pill">overview</span>
+        <strong>${escapeHtml(t('groupsTitle'))}</strong>
+        <span class="provider-pill">${escapeHtml(t('overview'))}</span>
       </div>
-      <div class="provider-status">${escapeHtml(`${localCount} local provider, ${cloudCount} cloud provider tanimli.`)}</div>
+      <div class="provider-status">${escapeHtml(t('groupsCopy', { local: localCount, cloud: cloudCount }))}</div>
       <div class="provider-models">${escapeHtml(providers.map(provider => `${provider.id}: ${provider.baseUrl || 'default endpoint'}`).join(' · '))}</div>
     </article>
     <article class="provider-card">
       <div class="provider-head">
-        <strong>Advanced note</strong>
-        <span class="provider-pill">custom endpoints</span>
+        <strong>${escapeHtml(t('advancedNoteTitle'))}</strong>
+        <span class="provider-pill">${escapeHtml(t('customEndpoints'))}</span>
       </div>
-      <div class="provider-status">Base URL alanlari Local ve Cloud sekmelerinde duzenlenir. Bu panel, saklama ve baglanti stratejisini ozetler.</div>
-      <div class="provider-hint">Cloud key'lerini uygulama icinden kaydet, yerel modellere gecmeden once Ollama veya LM Studio endpoint'lerini dogrula.</div>
+      <div class="provider-status">${escapeHtml(t('advancedNoteCopy'))}</div>
+      <div class="provider-hint">${escapeHtml(t('advancedNoteHint'))}</div>
     </article>
   `
 }
@@ -422,7 +1005,7 @@ function renderPermissions(settings) {
 function renderSkills(settings) {
   skillsPanel.innerHTML = ''
   if (!(settings.skills ?? []).length) {
-    skillsPanel.innerHTML = '<div class="empty-card">Skill bulunamadı.</div>'
+    skillsPanel.innerHTML = `<div class="empty-card">${escapeHtml(t('noSkills'))}</div>`
     return
   }
 
@@ -443,7 +1026,7 @@ function renderSkills(settings) {
 function renderPlugins(settings) {
   pluginsPanel.innerHTML = ''
   if (!(settings.plugins ?? []).length) {
-    pluginsPanel.innerHTML = '<div class="empty-card">Plugin bulunamadı.</div>'
+    pluginsPanel.innerHTML = `<div class="empty-card">${escapeHtml(t('noPlugins'))}</div>`
     return
   }
 
@@ -478,7 +1061,7 @@ function renderMemory(settings) {
 
   const sessionMarkup = sessions.length
     ? sessions.map(renderSessionCardMarkup).join('')
-    : '<div class="empty-card">Henüz kayıtlı sohbet yok.</div>'
+    : `<div class="empty-card">${escapeHtml(t('noSessions'))}</div>`
 
   memorySessionsPanel.innerHTML = sessionMarkup
   drawerSessionsPanel.innerHTML = sessionMarkup
@@ -494,77 +1077,88 @@ function renderMemory(settings) {
           <div class="note-time">${escapeHtml(formatTimestamp(note.createdAt))}</div>
         </article>
       `).join('')
-    : '<div class="empty-card">Henüz note yok.</div>'
+    : `<div class="empty-card">${escapeHtml(t('noNotes'))}</div>`
 
   scheduledTasksPanel.innerHTML = tasks.length
     ? tasks.map(task => `
-        <article class="note-card task-card">
-          <div class="note-head">
-            <strong>${escapeHtml(task.title)}</strong>
-            <span>${escapeHtml(task.status || 'draft')}</span>
+        <article class="note-card task-card ${escapeHtml(getTaskTimingState(task))}">
+          <div class="note-head task-head">
+            <div>
+              <strong>${escapeHtml(task.title)}</strong>
+              <div class="task-status-pill ${escapeHtml(getTaskTimingState(task))}">${escapeHtml(getTaskStatusLabel(task))}</div>
+            </div>
+            <button
+              type="button"
+              class="secondary task-delete"
+              data-delete-task-id="${escapeHtml(task.taskId)}"
+              aria-label="${escapeHtml(t('delete'))}"
+            >${escapeHtml(t('delete'))}</button>
           </div>
           ${task.goal ? `<div class="note-body">${escapeHtml(task.goal)}</div>` : ''}
-          ${task.delivery ? `<div class="note-time">Teslim: ${escapeHtml(task.delivery)}</div>` : ''}
+          ${task.delivery ? `<div class="note-time">${escapeHtml(t('due'))}: ${escapeHtml(task.delivery)}</div>` : ''}
         </article>
       `).join('')
-    : '<div class="empty-card">Planlanmis gorev yok.</div>'
+    : `<div class="empty-card">${escapeHtml(t('noTasks'))}</div>`
+
+  checkDueTasks()
 }
 
 function renderSessionCardMarkup(session) {
   return `
-    <button
-      type="button"
-      class="session-card ${session.sessionId === state.sessionId ? 'active' : ''}"
-      data-session-id="${escapeHtml(session.sessionId)}"
-    >
+    <article class="session-card ${session.sessionId === state.sessionId ? 'active' : ''}">
+      <button
+        type="button"
+        class="session-open"
+        data-session-id="${escapeHtml(session.sessionId)}"
+      >
       <div class="session-card-head">
-        <div class="session-title">${escapeHtml(session.preview || 'Yeni sohbet')}</div>
-        <span
-          class="session-delete"
-          role="button"
-          tabindex="0"
-          aria-label="Sohbeti sil"
-          data-delete-session-id="${escapeHtml(session.sessionId)}"
-        >Sil</span>
+        <div class="session-title">${escapeHtml(session.preview || t('newChat'))}</div>
       </div>
       <div class="session-meta">${escapeHtml(formatTimestamp(session.updatedAt))}</div>
-    </button>
+      </button>
+      <button
+        type="button"
+        class="session-delete"
+        aria-label="${escapeHtml(t('delete'))}"
+        data-delete-session-id="${escapeHtml(session.sessionId)}"
+      >${escapeHtml(t('delete'))}</button>
+    </article>
   `
 }
 
 function updateModelStatus() {
   const current = state.settings?.models?.find(model => model.id === modelSelect.value)
   if (!current) {
-    modelStatus.textContent = 'Model seçilmedi'
-    runtimeSummary.textContent = 'Runtime beklemede'
-    connectionSummary.textContent = 'Aktif model yok'
+    modelStatus.textContent = t('modelNotSelected')
+    runtimeSummary.textContent = t('runtimeWaiting')
+    connectionSummary.textContent = t('noActiveModel')
     sendButton.disabled = true
     return
   }
 
-  const readiness = current.available ? 'hazır' : 'kullanılamıyor'
+  const readiness = current.available ? t('readyShort') : t('unavailableShort')
   modelStatus.textContent = `${current.id} ${readiness}`
   runtimeSummary.textContent = current.available
-    ? `${formatAssistantProfileLabel(assistantProfileSelect.value)} · ${modeSelect.value.toUpperCase()} · ${agentToggle.checked ? `agent ${normalizeSteps(agentSteps.value)} step` : 'agent kapalı'}`
+    ? `${formatAssistantProfileLabel(assistantProfileSelect.value)} · ${modeSelect.value.toUpperCase()} · ${agentToggle.checked ? `agent ${normalizeSteps(agentSteps.value)} step` : 'agent off'}`
     : current.availabilityMessage
-  connectionSummary.textContent = `${current.id} · ${current.available ? 'online' : 'setup gerekli'}`
+  connectionSummary.textContent = `${current.id} · ${current.available ? t('online') : t('setupRequired')}`
   sendButton.disabled = !current.available
 }
 
 function updateSessionIndicators() {
   const lastUserMessage = findLastUserMessage(state.history)
   const lastParsed = lastUserMessage ? parseMessageContent(lastUserMessage.content) : null
-  const titleSource = lastParsed?.text ?? state.history.at(-1)?.content ?? 'Yeni sohbet'
+  const titleSource = lastParsed?.text ?? state.history.at(-1)?.content ?? t('newChat')
   chatTitle.textContent = summarizeTitle(titleSource)
   activeSessionMeta.textContent = state.sessionId
-    ? `${state.history.length} mesaj · ${state.sessionId.slice(0, 8)}…`
-    : 'Henüz mesaj yok'
+    ? `${state.history.length} ${t('messagesLabel')} · ${state.sessionId.slice(0, 8)}…`
+    : t('noMessagesYet')
   memorySessionBadge.textContent = state.sessionId
-    ? `Session aktif · ${state.sessionId.slice(0, 8)}…`
-    : 'Yeni session'
+    ? `${t('sessionActive')} · ${state.sessionId.slice(0, 8)}…`
+    : t('newSessionBadge')
   workspaceSummary.textContent = state.settings?.workspaceDir
-    ? `Workspace · ${state.settings.workspaceDir}`
-    : 'Workspace hazır'
+    ? `${t('workspaceLabel')} · ${state.settings.workspaceDir}`
+    : t('workspaceReady')
 }
 
 function renderAssistantProfileBadges() {
@@ -579,10 +1173,8 @@ function renderConversation() {
     messages.innerHTML = `
       <section class="empty-state">
         <div class="eyebrow">modAI</div>
-        <h3>${assistantProfileSelect.value === 'business-copilot' ? 'Business Development Copilot hazir.' : 'Profesyonel ve sade sohbet görünümü hazır.'}</h3>
-        <p>${assistantProfileSelect.value === 'business-copilot'
-          ? 'Gelir artisi, maliyet azaltma, operasyon ve buyume odakli analiz icin bir is turu veya hedef yaz. Copilot sektor ve olgunluk seviyesini infer ederek calisir.'
-          : 'Eski sohbetler solda kalir. Chat altinda gorsel ekleme, gorev verme ve bilgisayar kontrolu icin hizli aksiyonlar bulunur. Tool aktivitesi ayri panelde tutulur.'}</p>
+        <h3>${assistantProfileSelect.value === 'business-copilot' ? t('emptyBusinessTitle') : t('emptyGeneralTitle')}</h3>
+        <p>${assistantProfileSelect.value === 'business-copilot' ? t('emptyBusinessBody') : t('emptyGeneralBody')}</p>
         ${onboarding}
       </section>
     `
@@ -607,7 +1199,7 @@ function appendMessage(role, rawContent, meta = {}, skipScroll = false) {
   const timeLabel = meta.createdAt ? formatClock(meta.createdAt) : ''
   node.innerHTML = `
     <div class="message-head">
-      <div class="message-role">${escapeHtml(role === 'assistant' ? 'modAI' : 'You')}</div>
+      <div class="message-role">${escapeHtml(role === 'assistant' ? 'modAI' : t('you'))}</div>
       <div class="message-time">${escapeHtml(timeLabel)}</div>
     </div>
     ${renderMessageMeta(parsed.meta)}
@@ -626,7 +1218,7 @@ function appendMessage(role, rawContent, meta = {}, skipScroll = false) {
   }
 }
 
-function showThinkingMessage(label = 'modAI dusunuyor') {
+function showThinkingMessage(label = t('thinkingAnswer')) {
   clearThinkingMessage()
 
   const emptyState = messages.querySelector('.empty-state')
@@ -671,26 +1263,26 @@ function renderProviderOnboarding(settings) {
     <section class="setup-onboarding">
       <article class="setup-card">
         <div class="provider-head">
-          <strong>Provider Setup</strong>
-          <span class="provider-pill">${escapeHtml(`${localReady + cloudReady}/${localTotal + cloudTotal} hazir`)}</span>
+          <strong>${escapeHtml(t('providerSetupTitle'))}</strong>
+          <span class="provider-pill">${escapeHtml(`${localReady + cloudReady}/${localTotal + cloudTotal} ${t('readyShort')}`)}</span>
         </div>
-        <div class="provider-status">Bos sohbette en hizli akış: local modeli dogrula, sonra gerekirse cloud provider key'lerini ekle.</div>
+        <div class="provider-status">${escapeHtml(t('providerSetupBody'))}</div>
         <div class="setup-grid">
           <div class="setup-stat">
-            <span>Local</span>
+            <span>${escapeHtml(t('localLabel'))}</span>
             <strong>${escapeHtml(`${localReady}/${localTotal}`)}</strong>
-            <small>Ollama veya local OpenAI-compatible sunucu</small>
+            <small>${escapeHtml(t('localSetupCopy'))}</small>
           </div>
           <div class="setup-stat">
-            <span>Cloud</span>
+            <span>${escapeHtml(t('cloudLabel'))}</span>
             <strong>${escapeHtml(`${cloudReady}/${cloudTotal}`)}</strong>
-            <small>${escapeHtml(missingCloudKeys ? `${missingCloudKeys} API key bekliyor` : 'Cloud tarafi hazir')}</small>
+            <small>${escapeHtml(missingCloudKeys ? t('cloudWaiting', { count: missingCloudKeys }) : t('cloudReady'))}</small>
           </div>
         </div>
         <div class="onboarding-actions">
-          <button type="button" class="secondary" data-open-provider-tab="local">Local Setup</button>
-          <button type="button" class="secondary" data-open-provider-tab="cloud">Cloud Setup</button>
-          <button type="button" class="secondary" data-open-provider-tab="advanced">Advanced</button>
+          <button type="button" class="secondary" data-open-provider-tab="local">${escapeHtml(t('localSetup'))}</button>
+          <button type="button" class="secondary" data-open-provider-tab="cloud">${escapeHtml(t('cloudSetup'))}</button>
+          <button type="button" class="secondary" data-open-provider-tab="advanced">${escapeHtml(t('advanced'))}</button>
         </div>
       </article>
     </section>
@@ -707,9 +1299,10 @@ function renderMessageMeta(meta) {
     return ''
   }
 
+  const modeLabels = getModeLabels()
   const items = []
   if (meta.mode && meta.mode !== 'chat') {
-    items.push(`<span class="message-chip">${escapeHtml(MODE_LABELS[meta.mode] ?? meta.mode)}</span>`)
+    items.push(`<span class="message-chip">${escapeHtml(modeLabels[meta.mode] ?? meta.mode)}</span>`)
   }
   for (const attachment of meta.attachments ?? []) {
     items.push(`<span class="message-chip attachment">${escapeHtml(attachment.name)}</span>`)
@@ -724,7 +1317,7 @@ function renderMessageMeta(meta) {
 
 function fallbackMessageText(meta) {
   if (meta?.attachments?.length) {
-    return 'Ekli görsel gönderildi.'
+    return t('attachedImageSent')
   }
   return ''
 }
@@ -766,7 +1359,7 @@ function formatActivityEvent(event) {
   if (event.type === 'tool-call') {
     return {
       level: 'info',
-      title: `${event.toolName} çalıştırıldı`,
+      title: t('toolRan', { tool: event.toolName }),
       body: renderInline(event.input),
       createdAt,
     }
@@ -775,8 +1368,8 @@ function formatActivityEvent(event) {
   if (event.type === 'permission-required') {
     return {
       level: 'warn',
-      title: `${event.toolName} izin bekliyor`,
-      body: 'Devam etmek için kullanıcı onayı gerekli.',
+      title: t('toolNeedsPermission', { tool: event.toolName }),
+      body: t('permissionNeeded'),
       createdAt,
     }
   }
@@ -784,7 +1377,7 @@ function formatActivityEvent(event) {
   if (event.type === 'protocol-error') {
     return {
       level: 'error',
-      title: 'Agent protocol error',
+      title: t('protocolError'),
       body: event.message,
       createdAt,
     }
@@ -793,7 +1386,9 @@ function formatActivityEvent(event) {
   const output = renderInline(event?.output)
   return {
     level: event.status === 'error' ? 'error' : 'info',
-    title: `${event.toolName} ${event.status === 'error' ? 'hata verdi' : 'tamamlandı'}`,
+    title: event.status === 'error'
+      ? t('toolFailed', { tool: event.toolName })
+      : t('toolDone', { tool: event.toolName }),
     body: output,
     createdAt,
   }
@@ -805,10 +1400,16 @@ function renderActivity() {
   const total = state.activity.length
 
   activitySummary.textContent = total
-    ? `${total} aksiyon${errors ? ` · ${errors} hata` : ''}${warnings ? ` · ${warnings} izin` : ''}`
-    : 'Arka plan aktivitesi yok'
-  activityHeaderButton.textContent = total ? `Kayıt ${total}` : 'Aktivite'
-  toggleActivityButton.textContent = total ? `Aktivite ${total}` : 'Aktivite'
+    ? errors && warnings
+      ? t('actionsWithAll', { count: total, errors, warnings })
+      : errors
+        ? t('actionsWithErrors', { count: total, errors })
+        : warnings
+          ? t('actionsWithWarnings', { count: total, warnings })
+          : t('actionsSummary', { count: total })
+    : t('noActivity')
+  activityHeaderButton.textContent = total ? t('activityRecords', { count: total }) : t('activity')
+  toggleActivityButton.textContent = total ? `${t('activity')} ${total}` : t('activity')
 
   activityPanel.innerHTML = total
     ? state.activity.map(item => `
@@ -820,13 +1421,13 @@ function renderActivity() {
           <div class="activity-item-body">${escapeHtml(item.body)}</div>
         </article>
       `).join('')
-    : '<div class="empty-card">Henüz activity kaydı yok.</div>'
+    : `<div class="empty-card">${escapeHtml(t('activityEmpty'))}</div>`
 }
 
 function renderComposerContext() {
   taskModeButton.classList.toggle('active', state.composerMode === 'task')
   desktopModeButton.classList.toggle('active', state.composerMode === 'desktop')
-  modeStatusBadge.textContent = MODE_LABELS[state.composerMode]
+  modeStatusBadge.textContent = getModeLabels()[state.composerMode]
   updateComposerAffordances()
   renderComposerExamples()
   renderAttachmentStrip()
@@ -834,23 +1435,23 @@ function renderComposerContext() {
 
 function updateComposerAffordances() {
   if (state.composerMode === 'task') {
-    promptInput.placeholder = 'Gorev ayrintilarini yaz. Sablon aktifse alanlar otomatik doldurulur.'
-    sendButton.textContent = 'Kaydet'
+    promptInput.placeholder = t('taskPlaceholder')
+    sendButton.textContent = t('save')
     return
   }
 
   if (state.composerMode === 'desktop') {
-    promptInput.placeholder = 'Bilgisayarda uygulanacak aksiyonu dogrudan yaz. Ornek: Chrome ac ve YouTube’da Baran Gulesen ara.'
-    sendButton.textContent = 'Uygula'
+    promptInput.placeholder = t('desktopPlaceholder')
+    sendButton.textContent = t('run')
     return
   }
 
-  promptInput.placeholder = 'Mesajini yaz. Gorsel ekleyebilir, gorev plani baslatabilir veya bilgisayar kontrol moduna gecebilirsin.'
-  sendButton.textContent = 'Send'
+  promptInput.placeholder = t('promptDefault')
+  sendButton.textContent = uiLanguage() === 'tr' ? 'Gönder' : 'Send'
 }
 
 function renderComposerExamples() {
-  const examples = MODE_EXAMPLES[state.composerMode] ?? []
+  const examples = buildModeExamples()[state.composerMode] ?? []
   if (!examples.length) {
     composerExamples.innerHTML = ''
     composerExamples.classList.add('hidden')
@@ -858,7 +1459,7 @@ function renderComposerExamples() {
   }
 
   composerExamples.classList.remove('hidden')
-  const label = state.composerMode === 'desktop' ? 'Hazir bilgisayar akislari' : 'Hazir gorev sablonlari'
+  const label = state.composerMode === 'desktop' ? t('readyComputerFlows') : t('readyTaskTemplates')
   composerExamples.innerHTML = `
     <div class="composer-examples-label">${label}</div>
     <div class="composer-examples-list">
@@ -889,7 +1490,7 @@ function renderAttachmentStrip() {
         ? `<img class="attachment-thumb" src="${escapeHtml(attachment.url)}" alt="${escapeHtml(attachment.name)}" />`
         : ''}
       <span class="attachment-label">${escapeHtml(attachment.name)}</span>
-      <button type="button" class="attachment-remove" data-index="${index}">Kaldır</button>
+      <button type="button" class="attachment-remove" data-index="${index}">${escapeHtml(t('remove'))}</button>
     </div>
   `).join('')
 }
@@ -900,14 +1501,14 @@ async function onImageInputChange(event) {
     return
   }
 
-  setBusy(true, 'Görsel yükleniyor...')
+  setBusy(true, t('imageUploading'))
   try {
     for (const file of files) {
       const uploaded = await uploadImage(file)
       state.pendingAttachments.push(uploaded)
     }
     renderComposerContext()
-    setBusy(false, `${files.length} görsel eklendi`)
+    setBusy(false, t('imagesAdded', { count: files.length }))
   } catch (error) {
     showError(error)
   } finally {
@@ -980,7 +1581,7 @@ function onComposerExamplesClick(event) {
 
   const mode = button.dataset.exampleMode
   const index = Number(button.dataset.exampleIndex)
-  const example = MODE_EXAMPLES[mode]?.[index]
+  const example = buildModeExamples()[mode]?.[index]
   if (!example) {
     return
   }
@@ -993,7 +1594,7 @@ function onComposerExamplesClick(event) {
 }
 
 async function onSaveSettings() {
-  setBusy(true, 'Ayarlar kaydediliyor...')
+  setBusy(true, t('settingsSaving'))
   try {
     const settings = await fetchJson('/api/settings', {
       method: 'POST',
@@ -1002,7 +1603,7 @@ async function onSaveSettings() {
     })
     state.settings = settings
     renderSettings(settings)
-    setBusy(false, 'Ayarlar kaydedildi')
+    setBusy(false, t('settingsSaved'))
     return true
   } catch (error) {
     showError(error)
@@ -1067,15 +1668,21 @@ async function onSubmit(event) {
 
 function buildDefaultPrompt() {
   if (state.composerMode === 'desktop') {
-    return 'Bu görevi bilgisayar kontrol araçlarıyla adım adım tamamla.'
+    return uiLanguage() === 'tr'
+      ? 'Bu görevi bilgisayar kontrol araçlarıyla tamamla ve yalnız sonucu bildir.'
+      : 'Complete this task with computer control tools and report only the outcome.'
   }
 
   if (state.composerMode === 'task') {
-    return 'Bu görev için plan oluştur ve uygulamaya başla.'
+    return uiLanguage() === 'tr'
+      ? 'Bu görev için net bir plan oluştur ve görevi kaydet.'
+      : 'Create a clear plan for this task and save it.'
   }
 
   if (state.pendingAttachments.length) {
-    return 'Ekli görseli kullanarak yardımcı ol.'
+    return uiLanguage() === 'tr'
+      ? 'Ekli görseli kullanarak yardımcı ol.'
+      : 'Use the attached image in your response.'
   }
 
   return ''
@@ -1093,13 +1700,13 @@ function resolveRequestModel() {
 
   const fallback = (state.settings?.models ?? []).find(model => model.available && model.capabilities?.vision)
   if (!fallback) {
-    showError('Ekli gorsel icin vision destekli bir model bulunamadi.')
+    showError(t('noVisionModel'))
     return null
   }
 
   modelSelect.value = fallback.id
   updateModelStatus()
-  statusBox.textContent = `Vision modeli secildi · ${fallback.id}`
+  statusBox.textContent = t('visionSelected', { model: fallback.id })
   return fallback
 }
 
@@ -1122,7 +1729,7 @@ function onClear() {
   renderConversation()
   renderActivity()
   updateSessionIndicators()
-  setBusy(false, 'Yeni sohbet hazır')
+  setBusy(false, t('newChatReady'))
 }
 
 function collectSettingsPatch() {
@@ -1130,6 +1737,9 @@ function collectSettingsPatch() {
 
   return {
     defaultModel: modelSelect.value,
+    language: {
+      active: languageSelect.value,
+    },
     assistant: {
       profile: assistantProfileSelect.value,
     },
@@ -1187,7 +1797,7 @@ function onProviderPanelClick(event) {
     apiKey: '',
     clearApiKey: true,
   }
-  clearButton.textContent = 'Key temizlenecek'
+  clearButton.textContent = t('keyWillClear')
 }
 
 function onProviderPanelInput(event) {
@@ -1204,7 +1814,7 @@ function onProviderPanelInput(event) {
       apiKeyInput.dataset.clearApiKey = 'false'
       const clearButton = providersPanel.querySelector(`[data-provider-clear-key="${cssEscape(providerId)}"]`)
       if (clearButton) {
-        clearButton.textContent = "Kayitli key'i temizle"
+        clearButton.textContent = t('clearStoredKey')
       }
     }
     return
@@ -1325,16 +1935,16 @@ function setBusy(isBusy, label) {
 function showError(error) {
   const message = error instanceof Error ? error.message : String(error)
   clearThinkingMessage()
-  appendMessage('assistant', `Error: ${message}`, {
+  appendMessage('assistant', `${t('error')}: ${message}`, {
     createdAt: new Date().toISOString(),
     error: true,
   })
-  setBusy(false, 'Hata')
+  setBusy(false, t('error'))
 }
 
 async function runChatRequest(request, approvals = {}) {
-  setBusy(true, request.agent?.enabled ? 'Agent çalışıyor...' : 'Düşünüyor...')
-  showThinkingMessage(request.agent?.enabled ? 'Araçlari ve adimlari planliyor' : 'Yanit hazirlaniyor')
+  setBusy(true, request.agent?.enabled ? `${t('activity')}...` : t('thinkingAnswer'))
+  showThinkingMessage(request.agent?.enabled ? t('thinkingAgent') : t('thinkingAnswer'))
 
   try {
     const result = await fetchJson('/api/chat', {
@@ -1352,7 +1962,7 @@ async function runChatRequest(request, approvals = {}) {
       } catch (activityError) {
     state.activity.push({
       level: 'error',
-      title: 'Aktivite kaydı işlenemedi',
+      title: uiLanguage() === 'tr' ? 'Aktivite kaydı işlenemedi' : 'Failed to render activity entry',
       body: activityError instanceof Error ? activityError.message : String(activityError),
       createdAt: new Date().toISOString(),
     })
@@ -1369,7 +1979,7 @@ async function runChatRequest(request, approvals = {}) {
       openApprovalModal(result.permissionRequest)
       await refreshMemoryData()
       updateSessionIndicators()
-      setBusy(false, 'İzin gerekiyor')
+      setBusy(false, t('permissionNeeded'))
       return
     }
 
@@ -1387,7 +1997,7 @@ async function runChatRequest(request, approvals = {}) {
     appendMessage('assistant', assistantMessage.content, assistantMessage)
     await refreshMemoryData()
     updateSessionIndicators()
-    setBusy(false, `Hazır · ${result.model}`)
+    setBusy(false, `${t('ready')} · ${result.model}`)
   } catch (error) {
     showError(error)
   }
@@ -1413,7 +2023,9 @@ async function refreshMemoryData() {
 }
 
 function openApprovalModal(request) {
-  approvalTitle.textContent = `${request.toolName} için izin gerekiyor`
+  approvalTitle.textContent = uiLanguage() === 'tr'
+    ? `${request.toolName} için izin gerekiyor`
+    : `${request.toolName} needs approval`
   approvalMessage.textContent = request.message
   approvalInput.textContent = JSON.stringify(request.input ?? '', null, 2)
   approvalOverlay.classList.remove('hidden')
@@ -1427,8 +2039,10 @@ function onApprovalDeny() {
   if (state.pendingPermissionRequest?.toolName) {
     state.activity.push({
       level: 'warn',
-      title: `${state.pendingPermissionRequest.toolName} reddedildi`,
-      body: 'Kullanıcı izin vermedi.',
+      title: uiLanguage() === 'tr'
+        ? `${state.pendingPermissionRequest.toolName} reddedildi`
+        : `${state.pendingPermissionRequest.toolName} denied`,
+      body: uiLanguage() === 'tr' ? 'Kullanıcı izin vermedi.' : 'The user did not allow it.',
       createdAt: new Date().toISOString(),
     })
     renderActivity()
@@ -1437,7 +2051,7 @@ function onApprovalDeny() {
   state.pendingChatRequest = null
   clearThinkingMessage()
   closeApprovalModal()
-  setBusy(false, 'İzin reddedildi')
+  setBusy(false, t('permissionDenied'))
 }
 
 async function handlePermissionApproval(scope) {
@@ -1478,12 +2092,12 @@ async function onSessionCardClick(event) {
       return
     }
 
-    const confirmed = window.confirm('Bu sohbet kaydini silmek istiyor musun?')
+    const confirmed = window.confirm(t('deleteChatConfirm'))
     if (!confirmed) {
       return
     }
 
-    setBusy(true, 'Sohbet siliniyor...')
+    setBusy(true, t('deletingChat'))
     try {
       await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE',
@@ -1494,7 +2108,7 @@ async function onSessionCardClick(event) {
       }
 
       await refreshMemoryData()
-      setBusy(false, 'Sohbet silindi')
+      setBusy(false, t('deletedChat'))
     } catch (error) {
       showError(error)
     }
@@ -1511,7 +2125,7 @@ async function onSessionCardClick(event) {
     return
   }
 
-  setBusy(true, 'Sohbet yükleniyor...')
+  setBusy(true, t('loadingChat'))
   try {
     const session = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}`)
     state.sessionId = session.sessionId
@@ -1529,9 +2143,152 @@ async function onSessionCardClick(event) {
     renderActivity()
     updateSessionIndicators()
     await refreshMemoryData()
-    setBusy(false, `Sohbet yüklendi · ${session.modelId}`)
+    setBusy(false, t('loadedChat', { model: session.modelId }))
   } catch (error) {
     showError(error)
+  }
+}
+
+async function onScheduledTasksClick(event) {
+  const deleteButton = event.target.closest('[data-delete-task-id]')
+  if (!deleteButton) {
+    return
+  }
+
+  const taskId = deleteButton.dataset.deleteTaskId
+  if (!taskId) {
+    return
+  }
+
+  const confirmed = window.confirm(t('deleteTaskConfirm'))
+  if (!confirmed) {
+    return
+  }
+
+  setBusy(true, t('deletingTask'))
+  try {
+    await fetchJson(`/api/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'DELETE',
+    })
+    state.remindedTaskIds.delete(taskId)
+    await refreshMemoryData()
+    setBusy(false, t('deletedTask'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function onInstallSkill() {
+  const name = skillNameInput.value.trim()
+  const description = skillDescriptionInput.value.trim()
+  const content = skillContentInput.value.trim()
+  if (!content) {
+    showError(t('skillContentRequired'))
+    return
+  }
+
+  setBusy(true, t('installSkillBusy'))
+  try {
+    const result = await fetchJson('/api/skills', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, description, content }),
+    })
+    state.settings = result.state
+    skillNameInput.value = ''
+    skillDescriptionInput.value = ''
+    skillContentInput.value = ''
+    renderSettings(result.state)
+    setBusy(false, t('installSkillDone'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+function startReminderLoop() {
+  if (state.reminderTimer) {
+    window.clearInterval(state.reminderTimer)
+  }
+
+  state.reminderTimer = window.setInterval(() => {
+    checkDueTasks()
+  }, 30_000)
+}
+
+function checkDueTasks() {
+  const tasks = state.settings?.tasks ?? []
+  const now = Date.now()
+  for (const task of tasks) {
+    if (!task?.taskId || !task.delivery) {
+      continue
+    }
+
+    const dueAt = parseDeliveryDate(task.delivery)
+    if (!dueAt || dueAt.getTime() > now || state.remindedTaskIds.has(task.taskId)) {
+      continue
+    }
+
+    state.remindedTaskIds.add(task.taskId)
+    emitTaskReminder(task)
+  }
+}
+
+function emitTaskReminder(task) {
+  state.activity.unshift({
+    level: 'warn',
+    title: t('reminderTitle'),
+    body: t('reminderBody', { title: task.title }),
+    createdAt: new Date().toISOString(),
+  })
+  renderActivity()
+  statusBox.textContent = t('reminderTriggered', { title: summarizeTitle(task.title) })
+  playReminderChime()
+  notifyTask(task)
+}
+
+function notifyTask(task) {
+  if (typeof window.Notification !== 'function') {
+    return
+  }
+
+  if (window.Notification.permission === 'granted') {
+    try {
+      new window.Notification(t('reminderTitle'), {
+        body: t('reminderBody', { title: task.title }),
+      })
+    } catch {
+      // Ignore notification errors.
+    }
+  }
+}
+
+function playReminderChime() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext
+  if (!AudioCtx) {
+    return
+  }
+
+  try {
+    const context = new AudioCtx()
+    const now = context.currentTime
+    for (const [offset, frequency] of [[0, 880], [0.16, 1174]]) {
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = frequency
+      gain.gain.setValueAtTime(0.0001, now + offset)
+      gain.gain.exponentialRampToValueAtTime(0.08, now + offset + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18)
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start(now + offset)
+      oscillator.stop(now + offset + 0.22)
+    }
+    window.setTimeout(() => {
+      context.close().catch(() => {})
+    }, 600)
+  } catch {
+    // Ignore audio failures.
   }
 }
 
@@ -1640,7 +2397,7 @@ function parseTaskDraft(prompt) {
       continue
     }
 
-    const match = line.match(/^(Gorev|Görev|Amac|Amaç|Kisitlar|Kısıtlar|Teslim|Tamamlanma Kriteri)\s*:\s*(.*)$/i)
+    const match = line.match(/^(Gorev|Görev|Task|Amac|Amaç|Goal|Kisitlar|Kısıtlar|Constraints|Teslim|Due|Tamamlanma Kriteri|Completion Criteria)\s*:\s*(.*)$/i)
     if (match) {
       currentKey = normalizeTaskFieldName(match[1])
       fields[currentKey] = sanitizeTaskFieldValue(match[2])
@@ -1679,16 +2436,16 @@ function sanitizeTaskFieldValue(value) {
 
 function normalizeTaskFieldName(label) {
   const normalized = String(label ?? '').toLowerCase()
-  if (normalized.startsWith('gorev') || normalized.startsWith('görev')) {
+  if (normalized.startsWith('gorev') || normalized.startsWith('görev') || normalized.startsWith('task')) {
     return 'title'
   }
-  if (normalized.startsWith('amac') || normalized.startsWith('amaç')) {
+  if (normalized.startsWith('amac') || normalized.startsWith('amaç') || normalized.startsWith('goal')) {
     return 'goal'
   }
-  if (normalized.startsWith('kisit') || normalized.startsWith('kısıt')) {
+  if (normalized.startsWith('kisit') || normalized.startsWith('kısıt') || normalized.startsWith('constraints')) {
     return 'constraints'
   }
-  if (normalized.startsWith('teslim')) {
+  if (normalized.startsWith('teslim') || normalized.startsWith('due')) {
     return 'delivery'
   }
   return 'completion'
@@ -1715,13 +2472,13 @@ function renderInline(value) {
 function summarizeTitle(value) {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim()
   if (!text) {
-    return 'Yeni sohbet'
+    return t('newChat')
   }
   return text.length <= 42 ? text : `${text.slice(0, 42)}…`
 }
 
 function formatAssistantProfileLabel(value) {
-  return value === 'business-copilot' ? 'Business copilot' : 'General assistant'
+  return value === 'business-copilot' ? t('businessCopilot') : t('generalAssistant')
 }
 
 function normalizeSteps(value) {
@@ -1769,6 +2526,12 @@ function formatDateTimeForTask(date) {
   return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
+function parseDeliveryDate(value) {
+  const normalized = String(value ?? '').trim().replace(' ', 'T')
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 function findLastUserMessage(items) {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     if (items[index]?.role === 'user') {
@@ -1788,7 +2551,7 @@ function formatTimestamp(value) {
     return ''
   }
 
-  return date.toLocaleString('tr-TR', {
+  return date.toLocaleString(localeForUi(), {
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
@@ -1806,10 +2569,44 @@ function formatClock(value) {
     return ''
   }
 
-  return date.toLocaleTimeString('tr-TR', {
+  return date.toLocaleTimeString(localeForUi(), {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function getTaskTimingState(task) {
+  if (!task?.delivery) {
+    return 'draft'
+  }
+
+  const parsed = parseDeliveryDate(task.delivery)
+  if (!parsed) {
+    return String(task.status || 'scheduled').toLowerCase()
+  }
+
+  const delta = parsed.getTime() - Date.now()
+  if (delta < 0) {
+    return 'overdue'
+  }
+  if (delta <= 60 * 60 * 1000) {
+    return 'due-soon'
+  }
+  return 'scheduled'
+}
+
+function getTaskStatusLabel(task) {
+  const stateValue = getTaskTimingState(task)
+  if (stateValue === 'draft') {
+    return t('draft')
+  }
+  if (stateValue === 'overdue') {
+    return t('overdue')
+  }
+  if (stateValue === 'due-soon') {
+    return t('dueSoon')
+  }
+  return t('scheduled')
 }
 
 function readFileAsDataUrl(file) {

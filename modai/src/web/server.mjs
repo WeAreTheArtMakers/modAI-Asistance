@@ -83,6 +83,22 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, { ok: true, sessionId })
     }
 
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/tasks/')) {
+      const taskId = decodeURIComponent(url.pathname.slice('/api/tasks/'.length))
+      const deleted = await sessionStore.deleteScheduledTask(taskId)
+      if (!deleted) {
+        return sendJson(response, 404, { error: 'Task not found' })
+      }
+      return sendJson(response, 200, { ok: true, taskId })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/skills') {
+      const body = await readJson(request)
+      const skill = await saveUserSkill(body)
+      const config = await loadRuntimeConfig()
+      return sendJson(response, 200, { ok: true, skill, state: await buildClientState(config) })
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/settings') {
       const body = await readJson(request)
       const config = await configStore.update(async current => {
@@ -167,7 +183,7 @@ const server = createServer(async (request, response) => {
       }
 
       if (interactionMode === 'task' && savedTask) {
-        const text = buildTaskSavedMessage(savedTask)
+        const text = buildTaskSavedMessage(savedTask, config.language?.active)
         const persistedMessages = [
           ...inputMessages,
           {
@@ -410,6 +426,9 @@ async function buildClientState(config) {
     },
     mode: config.mode,
     theme: config.theme,
+    language: config.language ?? { active: 'en' },
+    now: new Date().toISOString(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     agent: {
       enabled: config.agent?.enabled !== false,
       maxSteps: config.agent?.maxSteps ?? 6,
@@ -571,15 +590,15 @@ function buildDiscoveredModels(config, providerInsights, existingModels) {
 
 function buildProviderSetupHint(alias, providerConfig, availabilityMessage) {
   if (providerConfig.apiKeySource === 'keychain') {
-    return 'API key macOS Keychain icinde saklaniyor. Istersen ayarlardan guncelleyebilirsin.'
+    return 'The API key is stored in macOS Keychain. You can update it from Settings.'
   }
 
   if (typeof providerConfig.apiKey === 'string' && providerConfig.apiKey.trim()) {
-    return 'API key uygulama icine kaydedildi. Istersen ayarlardan guncelleyebilirsin.'
+    return 'The API key is saved inside the app. You can update it from Settings.'
   }
 
   if (providerConfig.apiKeyEnv && availabilityMessage.includes(providerConfig.apiKeyEnv)) {
-    return `${providerConfig.apiKeyEnv} eksik. API key'i asagidan kaydedebilir veya ortam degiskeniyle gecirebilirsin.`
+    return `${providerConfig.apiKeyEnv} is missing. Save the API key below or provide it as an environment variable.`
   }
 
   if (providerConfig.type === 'ollama') {
@@ -591,10 +610,10 @@ function buildProviderSetupHint(alias, providerConfig, availabilityMessage) {
   }
 
   if (providerConfig.type === 'anthropic' || providerConfig.type === 'gemini') {
-    return `Gerekli API key'i ayarlardan ekleyerek ${alias} baglantisini acabilirsin.`
+    return `Add the required API key in Settings to enable the ${alias} connection.`
   }
 
-  return 'Provider endpoint ve kimlik bilgilerini kontrol et.'
+  return 'Check the provider endpoint and credentials.'
 }
 
 async function safeHealthcheck(provider) {
@@ -628,6 +647,10 @@ async function applySettingsPatch(config, patch = {}) {
 
   if (patch.theme?.active && ['auto', 'light', 'dark'].includes(patch.theme.active)) {
     config.theme.active = patch.theme.active
+  }
+
+  if (patch.language?.active && ['en', 'tr'].includes(patch.language.active)) {
+    config.language.active = patch.language.active
   }
 
   if (patch.providers && typeof patch.providers === 'object') {
@@ -765,25 +788,32 @@ function normalizeTaskDraft(taskDraft, interactionMode) {
   }
 }
 
-function buildTaskSavedMessage(task) {
+function buildTaskSavedMessage(task, language = 'en') {
+  const isTurkish = language === 'tr'
   const lines = [
-    `Görev kaydedildi: ${task.title}`,
+    isTurkish ? `Görev kaydedildi: ${task.title}` : `Task saved: ${task.title}`,
   ]
 
   if (task.goal) {
-    lines.push(`Amaç: ${task.goal}`)
+    lines.push(isTurkish ? `Amaç: ${task.goal}` : `Goal: ${task.goal}`)
   }
 
   if (task.delivery) {
-    lines.push(`Teslim: ${task.delivery}`)
+    lines.push(isTurkish ? `Teslim: ${task.delivery}` : `Due: ${task.delivery}`)
     if (isPastDelivery(task.delivery)) {
-      lines.push('Not: Bu teslim tarihi geçmiş görünüyor. Tarihi güncellemek istersen görevi yeniden oluştur.')
+      lines.push(isTurkish
+        ? 'Not: Bu teslim tarihi geçmiş görünüyor. Tarihi güncellemek istersen görevi yeniden oluştur.'
+        : 'Note: this due date appears to be in the past. Create the task again if you want to update it.')
     }
   } else {
-    lines.push('Teslim: tarih belirtilmedi, görev taslak olarak saklandı.')
+    lines.push(isTurkish
+      ? 'Teslim: tarih belirtilmedi, görev taslak olarak saklandı.'
+      : 'Due: no date provided, saved as a draft task.')
   }
 
-  lines.push('Kayıt modAI içindeki Planlanmış Görevler bölümüne eklendi. macOS Hatırlatıcılar uygulamasına otomatik yazma bu akışta zorunlu değil.')
+  lines.push(isTurkish
+    ? 'Kayıt Planlanmış Görevler bölümüne eklendi. modAI açıkken zamanında uygulama içi bildirim ve kısa bir zil sesi tetikler; macOS bildirimi için tarayıcı/Tauri izni gerekebilir.'
+    : 'The task was added to Scheduled Tasks. While modAI is open it can trigger an in-app reminder and a short chime at the due time; macOS notifications require notification permission.')
   return lines.join('\n')
 }
 
@@ -793,14 +823,14 @@ function normalizeDeliveryInput(value) {
     return ''
   }
 
-  const relativeMatch = text.match(/\b(bugun|bugün|yarin|yarın)\b(?:[^\d]*(\d{1,2})(?::|\.)(\d{2}))?/i)
+  const relativeMatch = text.match(/\b(bugun|bugün|today|yarin|yarın|tomorrow)\b(?:[^\d]*(\d{1,2})(?::|\.)(\d{2}))?/i)
   if (!relativeMatch) {
     return text
   }
 
   const date = new Date()
   const label = relativeMatch[1].toLowerCase()
-  if (label === 'yarin' || label === 'yarın') {
+  if (label === 'yarin' || label === 'yarın' || label === 'tomorrow') {
     date.setDate(date.getDate() + 1)
   }
 
@@ -808,6 +838,43 @@ function normalizeDeliveryInput(value) {
   const minute = Number(relativeMatch[3] ?? 0)
   date.setHours(Number.isFinite(hour) ? hour : 9, Number.isFinite(minute) ? minute : 0, 0, 0)
   return formatLocalDateTime(date)
+}
+
+async function saveUserSkill(body = {}) {
+  const id = sanitizeSkillId(body.id || body.name || 'custom-skill')
+  const title = sanitizeSkillTitle(body.name || id)
+  const description = String(body.description ?? '').trim()
+  const content = String(body.content ?? '').trim()
+  if (!content && !description) {
+    throw new Error('Skill content is required')
+  }
+
+  await configStore.ensureLayout()
+  const skillsDir = join(configStore.getBaseDir(), 'skills', id)
+  await mkdir(skillsDir, { recursive: true })
+  const skillPath = join(skillsDir, 'SKILL.md')
+  await writeFile(skillPath, [
+    `# ${title}`,
+    '',
+    description || 'User-installed modAI skill.',
+    '',
+    content || 'Use this skill when the user explicitly selects it.',
+    '',
+  ].join('\n'), 'utf8')
+
+  return { id, name: title, path: skillPath }
+}
+
+function sanitizeSkillId(value) {
+  const normalized = String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || `skill-${Date.now()}`
+}
+
+function sanitizeSkillTitle(value) {
+  return String(value ?? 'Custom Skill').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Custom Skill'
 }
 
 function isPastDelivery(value) {

@@ -312,6 +312,12 @@ export class SessionStore {
     `).all(limit)
   }
 
+  async deleteScheduledTask(taskId) {
+    const db = await this.ensureDb()
+    const result = db.prepare('DELETE FROM scheduled_tasks WHERE task_id = ?').run(taskId)
+    return result.changes > 0
+  }
+
   async ensureDb() {
     if (this.db) {
       return this.db

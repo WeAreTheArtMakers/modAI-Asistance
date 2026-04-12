@@ -34,5 +34,6 @@ test('ConfigStore upgrades legacy open permission for desktop control', async ()
 
   assert.equal(config.permissions.tools.open, 'allow')
   assert.equal(config.assistant.profile, 'business-copilot')
-  assert.equal(config.version, 7)
+  assert.equal(config.language.active, 'en')
+  assert.equal(config.version, 8)
 })
