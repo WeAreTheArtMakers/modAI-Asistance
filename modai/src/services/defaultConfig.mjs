@@ -14,6 +14,10 @@ export function createDefaultConfig() {
     theme: {
       active: 'auto',
     },
+    reminders: {
+      daemonEnabled: true,
+      sound: 'Glass',
+    },
     agent: {
       enabled: true,
       maxSteps: 6,
@@ -140,6 +144,10 @@ export function mergeConfigWithDefaults(config = {}) {
     theme: {
       ...defaults.theme,
       ...(config.theme ?? {}),
+    },
+    reminders: {
+      ...defaults.reminders,
+      ...(config.reminders ?? {}),
     },
     permissions: {
       ...defaults.permissions,

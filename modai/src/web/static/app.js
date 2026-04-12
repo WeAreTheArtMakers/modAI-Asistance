@@ -49,6 +49,7 @@ const closeSettingsButton = document.getElementById('closeSettingsButton')
 const drawerNewChatButton = document.getElementById('drawerNewChatButton')
 const settingsDrawer = document.getElementById('settingsDrawer')
 const drawerScrim = document.getElementById('drawerScrim')
+const drawerTabList = document.getElementById('drawerTabList')
 const activityShell = document.getElementById('activityShell')
 const activityPanel = document.getElementById('activityPanel')
 const activitySummary = document.getElementById('activitySummary')
@@ -63,7 +64,12 @@ const composerExamples = document.getElementById('composerExamples')
 const skillNameInput = document.getElementById('skillNameInput')
 const skillDescriptionInput = document.getElementById('skillDescriptionInput')
 const skillContentInput = document.getElementById('skillContentInput')
+const skillFileInput = document.getElementById('skillFileInput')
+const loadSkillFileButton = document.getElementById('loadSkillFileButton')
 const installSkillButton = document.getElementById('installSkillButton')
+const reminderDaemonToggle = document.getElementById('reminderDaemonToggle')
+const reminderSoundSelect = document.getElementById('reminderSoundSelect')
+const reminderStatus = document.getElementById('reminderStatus')
 
 const state = {
   settings: null,
@@ -81,6 +87,8 @@ const state = {
   language: 'en',
   reminderTimer: null,
   remindedTaskIds: new Set(),
+  activeDrawerTab: 'general',
+  locales: {},
 }
 
 const I18N = {
@@ -130,6 +138,12 @@ const I18N = {
     notesLabel: 'Notes',
     scheduledTasks: 'Scheduled Tasks',
     scheduledTasksCopy: 'Due tasks trigger an in-app reminder and a short chime while modAI is open.',
+    remindersLabel: 'Reminders',
+    remindersCopy: 'Keep reminders active in the background with a launch agent and Notification Center alerts.',
+    reminderDaemonLabel: 'Background reminder daemon',
+    reminderSoundLabel: 'Reminder sound',
+    reminderDaemonOn: 'Launch agent is enabled. Scheduled tasks can notify in the background.',
+    reminderDaemonOff: 'Launch agent is disabled. Reminders only work while the app is open.',
     saveSettings: 'Save Settings',
     runtimeReady: 'Runtime ready',
     permissionRequest: 'Permission Request',
@@ -248,6 +262,11 @@ const I18N = {
     customEndpoints: 'custom endpoints',
     installSkillBusy: 'Installing skill...',
     installSkillDone: 'Skill installed',
+    loadSkillFile: 'Load .md File',
+    skillFileLoaded: 'Skill file loaded',
+    generalTab: 'General',
+    automationTab: 'Automation',
+    extensionsTab: 'Extensions',
     skillContentRequired: 'Skill content is required.',
     noteCategory: 'general',
   },
@@ -297,6 +316,12 @@ const I18N = {
     notesLabel: 'Notlar',
     scheduledTasks: 'Planlanmış Görevler',
     scheduledTasksCopy: 'modAI açıkken zamanı gelen görevler uygulama içi bildirim ve kısa bir zil sesi üretir.',
+    remindersLabel: 'Hatırlatıcılar',
+    remindersCopy: 'Hatırlatıcıları arka planda launch agent ve Bildirim Merkezi uyarıları ile aktif tut.',
+    reminderDaemonLabel: 'Arka plan hatırlatıcı servisi',
+    reminderSoundLabel: 'Hatırlatıcı sesi',
+    reminderDaemonOn: 'Launch agent açık. Planlanmış görevler arka planda bildirim üretebilir.',
+    reminderDaemonOff: 'Launch agent kapalı. Hatırlatıcılar yalnız uygulama açıkken çalışır.',
     saveSettings: 'Ayarları Kaydet',
     runtimeReady: 'Çalışma ortamı hazır',
     permissionRequest: 'İzin İsteği',
@@ -415,6 +440,11 @@ const I18N = {
     customEndpoints: 'özel endpointler',
     installSkillBusy: 'Skill yükleniyor...',
     installSkillDone: 'Skill yüklendi',
+    loadSkillFile: '.md Dosyası Yükle',
+    skillFileLoaded: 'Skill dosyası yüklendi',
+    generalTab: 'Genel',
+    automationTab: 'Otomasyon',
+    extensionsTab: 'Eklentiler',
     skillContentRequired: 'Skill içeriği gerekli.',
     noteCategory: 'genel',
   },
@@ -423,6 +453,7 @@ const I18N = {
 boot().catch(showError)
 
 async function boot() {
+  await loadLocaleDictionaries()
   bindEvents()
   await refreshSettings()
   renderConversation()
@@ -444,6 +475,9 @@ function bindEvents() {
   })
   assistantProfileSelect.addEventListener('change', renderAssistantProfileBadges)
   themeSelect.addEventListener('change', () => applyTheme(themeSelect.value))
+  reminderDaemonToggle.addEventListener('change', () => {
+    reminderStatus.textContent = reminderDaemonToggle.checked ? t('reminderDaemonOn') : t('reminderDaemonOff')
+  })
   agentToggle.addEventListener('change', updateModelStatus)
   agentSteps.addEventListener('input', updateModelStatus)
   templateToggle.addEventListener('change', syncTemplateControls)
@@ -455,6 +489,7 @@ function bindEvents() {
   memorySessionsPanel.addEventListener('click', onSessionCardClick)
   drawerSessionsPanel.addEventListener('click', onSessionCardClick)
   scheduledTasksPanel.addEventListener('click', onScheduledTasksClick)
+  drawerTabList.addEventListener('click', onDrawerTabClick)
   providersPanel.addEventListener('click', onProviderPanelClick)
   providersPanel.addEventListener('input', onProviderPanelInput)
   providerTabList.addEventListener('click', onProviderTabClick)
@@ -471,6 +506,8 @@ function bindEvents() {
   attachmentStrip.addEventListener('click', onAttachmentStripClick)
   composerExamples.addEventListener('click', onComposerExamplesClick)
   messages.addEventListener('click', onMessageAreaClick)
+  loadSkillFileButton.addEventListener('click', () => skillFileInput.click())
+  skillFileInput.addEventListener('change', onSkillFileSelected)
   installSkillButton.addEventListener('click', onInstallSkill)
   promptInput.addEventListener('input', resizeComposerInput)
   promptInput.addEventListener('keydown', event => {
@@ -490,13 +527,31 @@ function localeForUi() {
 }
 
 function t(key, variables = {}) {
-  const dictionary = I18N[uiLanguage()] ?? I18N.en
+  const dictionary = state.locales[uiLanguage()] ?? I18N[uiLanguage()] ?? I18N.en
   const fallback = I18N.en[key] ?? key
   const template = dictionary[key] ?? fallback
   return Object.entries(variables).reduce(
     (output, [name, value]) => output.replaceAll(`{${name}}`, String(value)),
     template,
   )
+}
+
+async function loadLocaleDictionaries() {
+  const entries = await Promise.all(
+    ['en', 'tr'].map(async language => {
+      try {
+        const response = await fetch(`/locales/${language}.json`)
+        if (!response.ok) {
+          throw new Error(`Locale ${language} not found`)
+        }
+        return [language, await response.json()]
+      } catch {
+        return [language, {}]
+      }
+    }),
+  )
+
+  state.locales = Object.fromEntries(entries)
 }
 
 function applyTranslations() {
@@ -522,6 +577,17 @@ function applyTranslations() {
       : button.dataset.providerTab === 'cloud'
         ? 'cloudLabel'
         : 'advancedLabel'
+    button.textContent = t(key)
+  }
+
+  for (const button of drawerTabList.querySelectorAll('[data-drawer-tab]')) {
+    const key = button.dataset.drawerTab === 'general'
+      ? 'generalTab'
+      : button.dataset.drawerTab === 'automation'
+        ? 'automationTab'
+        : button.dataset.drawerTab === 'extensions'
+          ? 'extensionsTab'
+          : 'activity'
     button.textContent = t(key)
   }
 
@@ -551,6 +617,13 @@ function applyTranslations() {
   updateSessionIndicators()
   renderAssistantProfileBadges()
   updateModelStatus()
+  renderProviders(state.settings ?? {})
+  renderPermissions(state.settings ?? {})
+  renderSkills(state.settings ?? {})
+  renderPlugins(state.settings ?? {})
+  renderTools(state.settings ?? {})
+  renderMemory(state.settings ?? {})
+  renderReminderSettings(state.settings ?? {})
   renderComposerContext()
   renderActivity()
   renderConversation()
@@ -805,6 +878,7 @@ function renderSettings(settings) {
   renderProviders(settings)
   renderAgent(settings)
   renderComposerTemplateSettings(settings)
+  renderReminderSettings(settings)
   renderPermissions(settings)
   renderSkills(settings)
   renderPlugins(settings)
@@ -815,6 +889,17 @@ function renderSettings(settings) {
   updateSessionIndicators()
   renderComposerContext()
   resizeComposerInput()
+}
+
+function renderReminderSettings(settings) {
+  const reminders = settings.reminders ?? {}
+  reminderDaemonToggle.checked = reminders.daemonEnabled !== false
+  reminderSoundSelect.value = reminders.sound || 'Glass'
+  reminderStatus.textContent = reminderDaemonToggle.checked
+    ? reminders.daemon?.installed === false
+      ? `${t('reminderDaemonOn')} ${reminders.daemon.message ?? ''}`.trim()
+      : t('reminderDaemonOn')
+    : t('reminderDaemonOff')
 }
 
 function renderModels(settings) {
@@ -1092,7 +1177,7 @@ function renderMemory(settings) {
               class="secondary task-delete"
               data-delete-task-id="${escapeHtml(task.taskId)}"
               aria-label="${escapeHtml(t('delete'))}"
-            >${escapeHtml(t('delete'))}</button>
+            >×</button>
           </div>
           ${task.goal ? `<div class="note-body">${escapeHtml(task.goal)}</div>` : ''}
           ${task.delivery ? `<div class="note-time">${escapeHtml(t('due'))}: ${escapeHtml(task.delivery)}</div>` : ''}
@@ -1121,7 +1206,7 @@ function renderSessionCardMarkup(session) {
         class="session-delete"
         aria-label="${escapeHtml(t('delete'))}"
         data-delete-session-id="${escapeHtml(session.sessionId)}"
-      >${escapeHtml(t('delete'))}</button>
+      >×</button>
     </article>
   `
 }
@@ -1749,6 +1834,10 @@ function collectSettingsPatch() {
     theme: {
       active: themeSelect.value,
     },
+    reminders: {
+      daemonEnabled: reminderDaemonToggle.checked,
+      sound: reminderSoundSelect.value,
+    },
     agent: {
       enabled: agentToggle.checked,
       maxSteps: normalizeSteps(agentSteps.value),
@@ -2087,6 +2176,8 @@ function setPermissionSelectValue(permissionKey, value) {
 async function onSessionCardClick(event) {
   const deleteButton = event.target.closest('[data-delete-session-id]')
   if (deleteButton) {
+    event.preventDefault()
+    event.stopPropagation()
     const sessionId = deleteButton.dataset.deleteSessionId
     if (!sessionId) {
       return
@@ -2155,6 +2246,9 @@ async function onScheduledTasksClick(event) {
     return
   }
 
+  event.preventDefault()
+  event.stopPropagation()
+
   const taskId = deleteButton.dataset.deleteTaskId
   if (!taskId) {
     return
@@ -2202,6 +2296,54 @@ async function onInstallSkill() {
     setBusy(false, t('installSkillDone'))
   } catch (error) {
     showError(error)
+  }
+}
+
+async function onSkillFileSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) {
+    return
+  }
+
+  try {
+    const content = await file.text()
+    if (!skillNameInput.value.trim()) {
+      skillNameInput.value = file.name.replace(/\.md$/i, '').replace(/[-_]+/g, ' ')
+    }
+    if (!skillDescriptionInput.value.trim()) {
+      const firstBodyLine = content
+        .split('\n')
+        .map(line => line.trim())
+        .find(line => line && !line.startsWith('#'))
+      skillDescriptionInput.value = firstBodyLine || ''
+    }
+    skillContentInput.value = content
+    setBusy(false, t('skillFileLoaded'))
+  } catch (error) {
+    showError(error)
+  } finally {
+    skillFileInput.value = ''
+  }
+}
+
+function onDrawerTabClick(event) {
+  const button = event.target.closest('[data-drawer-tab]')
+  if (!button) {
+    return
+  }
+
+  setDrawerTab(button.dataset.drawerTab || 'general')
+}
+
+function setDrawerTab(tab) {
+  state.activeDrawerTab = ['general', 'automation', 'extensions', 'activity'].includes(tab) ? tab : 'general'
+
+  for (const button of drawerTabList.querySelectorAll('[data-drawer-tab]')) {
+    button.classList.toggle('is-active', button.dataset.drawerTab === state.activeDrawerTab)
+  }
+
+  for (const section of settingsDrawer.querySelectorAll('[data-drawer-section]')) {
+    section.classList.toggle('hidden-section', section.dataset.drawerSection !== state.activeDrawerTab)
   }
 }
 
@@ -2298,6 +2440,8 @@ function openSettingsDrawer(options = {}) {
     renderProviders(state.settings ?? {})
   }
 
+  setDrawerTab(options.drawerTab ?? 'general')
+
   settingsDrawer.classList.remove('hidden')
   drawerScrim.classList.remove('hidden')
 
@@ -2309,8 +2453,7 @@ function openSettingsDrawer(options = {}) {
 }
 
 function openActivityDrawer() {
-  openSettingsDrawer()
-  activityShell.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  openSettingsDrawer({ drawerTab: 'activity' })
 }
 
 function closeSettingsDrawer() {

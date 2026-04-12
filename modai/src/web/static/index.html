@@ -87,8 +87,15 @@
           <button type="button" id="closeSettingsButton" class="secondary" data-i18n="close">Close</button>
         </div>
 
+        <div class="drawer-tabs" id="drawerTabList">
+          <button type="button" class="drawer-tab is-active" data-drawer-tab="general">General</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="automation">Automation</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="extensions">Extensions</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="activity">Activity</button>
+        </div>
+
         <div class="drawer-scroll">
-          <section class="drawer-section drawer-mobile-shell" id="drawerMobileShell">
+          <section class="drawer-section drawer-mobile-shell" id="drawerMobileShell" data-drawer-section="general">
             <div class="drawer-mobile-head">
               <div class="section-title" data-i18n="panel">Panel</div>
               <button type="button" id="drawerNewChatButton" class="secondary" data-i18n="newChat">New Chat</button>
@@ -97,7 +104,7 @@
             <div class="session-list drawer-session-list" id="drawerSessionsPanel"></div>
           </section>
 
-          <section class="drawer-section" id="providersSection">
+          <section class="drawer-section" id="providersSection" data-drawer-section="general">
             <div class="provider-section-head">
               <div>
                 <div class="section-title" data-i18n="providersLabel">Providers</div>
@@ -112,7 +119,7 @@
             <div class="provider-list" id="providersPanel"></div>
           </section>
 
-          <section class="drawer-section">
+          <section class="drawer-section" data-drawer-section="general">
             <div class="section-title" data-i18n="runtimeLabel">Runtime</div>
             <div class="field-grid">
               <label class="field">
@@ -155,7 +162,7 @@
             </div>
           </section>
 
-          <section class="drawer-section">
+          <section class="drawer-section" data-drawer-section="automation">
             <div class="section-title" data-i18n="taskDrafts">Task Drafts</div>
             <div class="drawer-subtitle" data-i18n="taskDraftsCopy">Automatic drafts are only used for task planning. Computer Use accepts direct commands.</div>
             <div class="field-grid">
@@ -174,7 +181,28 @@
             </div>
           </section>
 
-          <section class="drawer-section" id="activityShell">
+          <section class="drawer-section" data-drawer-section="automation">
+            <div class="section-title" data-i18n="remindersLabel">Reminders</div>
+            <div class="drawer-subtitle" data-i18n="remindersCopy">Keep reminders active in the background with a launch agent and Notification Center alerts.</div>
+            <div class="field-grid">
+              <label class="field inline-field">
+                <span data-i18n="reminderDaemonLabel">Background reminder daemon</span>
+                <input type="checkbox" id="reminderDaemonToggle" checked />
+              </label>
+              <label class="field">
+                <span data-i18n="reminderSoundLabel">Reminder sound</span>
+                <select id="reminderSoundSelect">
+                  <option value="Glass">Glass</option>
+                  <option value="Ping">Ping</option>
+                  <option value="Pop">Pop</option>
+                  <option value="Basso">Basso</option>
+                </select>
+              </label>
+              <div class="runtime-status" id="reminderStatus"></div>
+            </div>
+          </section>
+
+          <section class="drawer-section" id="activityShell" data-drawer-section="activity">
             <div class="activity-header">
               <div>
                 <div class="section-title" data-i18n="activity">Activity</div>
@@ -185,12 +213,12 @@
             <div class="activity-feed drawer-activity-feed" id="activityPanel"></div>
           </section>
 
-          <section class="drawer-section">
+          <section class="drawer-section" data-drawer-section="general">
             <div class="section-title" data-i18n="permissionsLabel">Permissions</div>
             <div class="list-grid" id="permissionsPanel"></div>
           </section>
 
-          <section class="drawer-section">
+          <section class="drawer-section" data-drawer-section="extensions">
             <div class="section-title" data-i18n="skillsLabel">Skills</div>
             <div class="drawer-subtitle" data-i18n="skillsCopy">Enable built-in skills or install external skills for new workflows.</div>
             <div class="field-grid skill-install-grid">
@@ -206,27 +234,31 @@
                 <span data-i18n="skillContentLabel">Skill instructions</span>
                 <textarea id="skillContentInput" rows="6" data-i18n-placeholder="skillContentPlaceholder" placeholder="Describe when the skill should be used and what it should do."></textarea>
               </label>
-              <button type="button" id="installSkillButton" class="secondary" data-i18n="installSkill">Install Skill</button>
+              <div class="skill-upload-actions">
+                <input id="skillFileInput" type="file" accept=".md,text/markdown" hidden />
+                <button type="button" id="loadSkillFileButton" class="secondary" data-i18n="loadSkillFile">Load .md File</button>
+                <button type="button" id="installSkillButton" class="secondary" data-i18n="installSkill">Install Skill</button>
+              </div>
             </div>
             <div class="check-list" id="skillsPanel"></div>
           </section>
 
-          <section class="drawer-section">
+          <section class="drawer-section" data-drawer-section="extensions">
             <div class="section-title" data-i18n="pluginsLabel">Plugins</div>
             <div class="check-list" id="pluginsPanel"></div>
           </section>
 
-          <section class="drawer-section">
+          <section class="drawer-section" data-drawer-section="extensions">
             <div class="section-title" data-i18n="toolsLabel">Tools</div>
             <div class="tool-list" id="toolsPanel"></div>
           </section>
 
-          <section class="drawer-section">
+          <section class="drawer-section" data-drawer-section="extensions">
             <div class="section-title" data-i18n="notesLabel">Notes</div>
             <div class="notes-list" id="memoryNotesPanel"></div>
           </section>
 
-          <section class="drawer-section">
+          <section class="drawer-section" data-drawer-section="automation">
             <div class="section-title" data-i18n="scheduledTasks">Scheduled Tasks</div>
             <div class="drawer-subtitle" data-i18n="scheduledTasksCopy">Due tasks trigger an in-app reminder and a short chime while modAI is open.</div>
             <div class="notes-list" id="scheduledTasksPanel"></div>

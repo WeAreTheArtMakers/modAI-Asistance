@@ -1,6 +1,16 @@
 # modAI
 
-`modAI` is an open-source, local-first AI assistant for macOS Apple Silicon.
+`modAI` is the local-first AI operating layer for macOS Apple Silicon.
+
+It is built for people who want one fast assistant that can:
+
+- chat with the model stack they already use
+- automate daily desktop tasks
+- write code and operate like an agent
+- generate images when the selected model supports it
+- stay usable as a real product instead of a demo UI
+
+If ChatGPT is a browser tab and Claude is a research partner, `modAI` is intended to be the assistant that lives closer to the operating system and the user’s real workflow.
 
 It combines:
 
@@ -12,6 +22,20 @@ It combines:
 - local-first workflows with Ollama as the default path
 
 The product is under active development. The current priority is a clean ChatGPT/Codex-style interface, reliable multimodal chat, safe computer-use flows, and a deployment path that works both locally and on the web.
+
+## Marketing copy
+
+**modAI turns your Mac into an AI workspace, not just an AI chat.**
+
+Use local models with Ollama, connect Gemini or Anthropic when you need more power, run computer tasks with approvals, save reusable skills, keep reminders alive, and stay in one focused interface that is designed for real work.
+
+modAI is aimed at:
+
+- founders and operators
+- creators and marketers
+- developers and technical agents
+- freelancers and agencies
+- advanced users who want local control without giving up modern model quality
 
 ## Status
 

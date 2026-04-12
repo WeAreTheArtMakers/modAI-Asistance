@@ -375,12 +375,18 @@ button:disabled {
 .session-delete {
   flex: 0 0 auto;
   align-self: center;
-  padding: 0.22rem 0.48rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: transparent;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 1rem;
+  line-height: 1;
   transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
 
@@ -856,11 +862,39 @@ textarea {
   backdrop-filter: blur(16px);
 }
 
+.drawer-tabs {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--drawer-header-bg);
+}
+
+.drawer-tab {
+  padding: 0.46rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.drawer-tab.is-active,
+.drawer-tab:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: var(--accent-soft);
+}
+
 .drawer-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 1rem;
+}
+
+.hidden-section {
+  display: none;
 }
 
 .drawer-section + .drawer-section {
@@ -1000,12 +1034,22 @@ textarea {
 }
 
 .task-delete {
-  padding: 0.34rem 0.56rem;
-  font-size: 0.76rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .skill-install-grid {
   margin-top: 0.8rem;
+}
+
+.skill-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .provider-pill {

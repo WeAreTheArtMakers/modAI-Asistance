@@ -12,6 +12,7 @@ import { PermissionRequiredError } from '../core/toolAccess.mjs'
 import { ConfigStore } from '../services/ConfigStore.mjs'
 import { KeychainStore } from '../services/KeychainStore.mjs'
 import { PluginStore } from '../services/PluginStore.mjs'
+import { getReminderDaemonStatus, syncReminderDaemon } from '../services/reminderDaemon.mjs'
 import { SessionStore } from '../services/SessionStore.mjs'
 import { SkillStore } from '../services/SkillStore.mjs'
 import { applyProviderSecretUpdates, prepareRuntimeConfig } from '../services/providerSecrets.mjs'
@@ -104,6 +105,12 @@ const server = createServer(async (request, response) => {
       const config = await configStore.update(async current => {
         await applySettingsPatch(current, body)
         return current
+      })
+      await syncReminderDaemon({
+        enabled: config.reminders?.daemonEnabled !== false,
+        sound: config.reminders?.sound || 'Glass',
+        configStore,
+        runtimeDir: runtimeProjectDir,
       })
       const runtimeConfig = await prepareRuntimeConfig(config, { configStore, keychainStore })
       return sendJson(response, 200, await buildClientState(runtimeConfig))
@@ -361,6 +368,11 @@ const server = createServer(async (request, response) => {
       return sendFile(response, join(staticDir, 'brand-mark.svg'), 'image/svg+xml; charset=utf-8')
     }
 
+    if (request.method === 'GET' && url.pathname.startsWith('/locales/')) {
+      const name = basename(url.pathname)
+      return sendFile(response, join(staticDir, 'locales', name), 'application/json; charset=utf-8')
+    }
+
     sendJson(response, 404, { error: 'Not found' })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -377,6 +389,13 @@ server.listen(port, host, async () => {
     startedAt: new Date().toISOString(),
     pid: process.pid,
   }), 'utf8')
+  const config = await loadRuntimeConfig()
+  await syncReminderDaemon({
+    enabled: config.reminders?.daemonEnabled !== false,
+    sound: config.reminders?.sound || 'Glass',
+    configStore,
+    runtimeDir: runtimeProjectDir,
+  })
   console.log(`modAI web listening on http://${host}:${port}`)
 })
 
@@ -419,6 +438,7 @@ async function buildClientState(config) {
     sessionStore.listNotes(10),
     sessionStore.listScheduledTasks(10),
   ])
+  const reminderDaemon = await getReminderDaemonStatus()
   return {
     defaultModel: preferredDefaultModel,
     assistant: {
@@ -426,6 +446,11 @@ async function buildClientState(config) {
     },
     mode: config.mode,
     theme: config.theme,
+    reminders: {
+      daemonEnabled: config.reminders?.daemonEnabled !== false,
+      sound: config.reminders?.sound || 'Glass',
+      daemon: reminderDaemon,
+    },
     language: config.language ?? { active: 'en' },
     now: new Date().toISOString(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -651,6 +676,15 @@ async function applySettingsPatch(config, patch = {}) {
 
   if (patch.language?.active && ['en', 'tr'].includes(patch.language.active)) {
     config.language.active = patch.language.active
+  }
+
+  if (patch.reminders && typeof patch.reminders === 'object') {
+    if (typeof patch.reminders.daemonEnabled === 'boolean') {
+      config.reminders.daemonEnabled = patch.reminders.daemonEnabled
+    }
+    if (typeof patch.reminders.sound === 'string' && patch.reminders.sound.trim()) {
+      config.reminders.sound = patch.reminders.sound.trim()
+    }
   }
 
   if (patch.providers && typeof patch.providers === 'object') {
