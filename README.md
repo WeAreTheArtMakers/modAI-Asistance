@@ -142,7 +142,7 @@ Main directories:
 
 Requirements:
 
-- Node.js `20+`
+- Node.js `22+`
 - Rust toolchain for Tauri builds
 - macOS for the desktop app
 - Ollama for the default local model path

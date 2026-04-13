@@ -15,7 +15,7 @@
     "doctor": "node modai/src/cli.mjs doctor",
     "models": "node modai/src/cli.mjs models",
     "config:init": "node modai/src/cli.mjs config init",
-    "test": "node --test modai/test/*.test.mjs",
+    "test": "node scripts/run-tests.mjs",
     "build:mac:web": "node scripts/build-macos-app.mjs",
     "package:mac:web": "node scripts/build-macos-app.mjs",
     "build:mac": "node scripts/build-tauri-macos-app.mjs",
@@ -25,6 +25,6 @@
     "cargo:check": "cargo check --manifest-path src-tauri/Cargo.toml"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   }
 }

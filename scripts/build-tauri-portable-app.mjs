@@ -37,7 +37,7 @@ What is included
 - Local-first web UI served from a background Node process
 
 Requirements
-- Node.js 20+ on PATH
+- Node.js 22+ on PATH
 - Optional: Ollama for local model usage
 
 Run

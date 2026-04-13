@@ -57,7 +57,7 @@ What is bundled
 
 Requirements
 - macOS 13+
-- Node.js 20+ on PATH
+- Node.js 22+ on PATH
 - Optional: Ollama for local model usage
 
 Run

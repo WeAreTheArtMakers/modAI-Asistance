@@ -58,7 +58,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\${P
 mkdir -p "$STATE_DIR"
 
 if [[ -z "$NODE_BIN" ]]; then
-  /usr/bin/osascript -e 'display alert "modAI needs Node.js 20+" message "Install Node.js, then relaunch modAI." as critical'
+  /usr/bin/osascript -e 'display alert "modAI needs Node.js 22+" message "Install Node.js, then relaunch modAI." as critical'
   exit 1
 fi
 
@@ -89,7 +89,7 @@ RUNTIME_DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE_BIN="\${MODAI_NODE_BIN:-\$(command -v node || true)}"
 
 if [[ -z "$NODE_BIN" ]]; then
-  echo "modAI requires Node.js 20+ on PATH."
+  echo "modAI requires Node.js 22+ on PATH."
   echo "Install Node.js, then relaunch the app."
   exit 1
 fi
@@ -105,12 +105,12 @@ const readme = `modAI macOS ${process.arch} build
 
 Requirements
 - macOS 13+
-- Node.js 20+
+- Node.js 22+
 - Browser UI opens locally on http://127.0.0.1:8787
 - Optional: Ollama for fully local model usage
 
 Quick start
-1. Install Node.js 20+ if it is not already available on PATH.
+1. Install Node.js 22+ if it is not already available on PATH.
 2. Install and start Ollama:
    ollama serve
    ollama pull llama3.2
