@@ -1,8 +1,11 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { execFile as execFileCallback } from 'node:child_process'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import { createRuntimeContext } from '../core/runtimeContext.mjs'
 import { summarizeToolEvent } from '../core/agentProtocol.mjs'
@@ -11,12 +14,29 @@ import { resolveAgentModelRoute } from '../core/agentRouting.mjs'
 import { detectInteractionMode, shouldEnableAgentForMode } from '../core/requestMode.mjs'
 import { PermissionRequiredError } from '../core/toolAccess.mjs'
 import { ConfigStore } from '../services/ConfigStore.mjs'
+import { BillingStore, buildBillingClientState } from '../services/BillingStore.mjs'
 import { KeychainStore } from '../services/KeychainStore.mjs'
+import { completeMcpOAuthCallback, startMcpOAuthFlow } from '../services/mcpOAuth.mjs'
+import { inspectMcpServer } from '../services/mcpRuntime.mjs'
 import { PluginStore } from '../services/PluginStore.mjs'
 import { getReminderDaemonStatus, syncReminderDaemon } from '../services/reminderDaemon.mjs'
 import { SessionStore } from '../services/SessionStore.mjs'
 import { SkillStore } from '../services/SkillStore.mjs'
-import { applyProviderSecretUpdates, prepareRuntimeConfig } from '../services/providerSecrets.mjs'
+import {
+  activateLemonLicense,
+  createDirectCryptoInvoice,
+  extractLemonWebhookRecord,
+  extractNowPaymentsWebhookRecord,
+  getBillingCatalog,
+  getBillingEnvironment,
+  getCardCheckoutUrl,
+  isSuccessfulCryptoStatus,
+  resolveBillingPlan,
+  verifyDirectCryptoTransfer,
+  verifyLemonWebhookSignature,
+  verifyNowPaymentsWebhookSignature,
+} from '../services/billingGateway.mjs'
+import { applyMcpSecretUpdates, applyProviderSecretUpdates, prepareRuntimeConfig } from '../services/providerSecrets.mjs'
 import { createDefaultProviderRegistry } from '../core/ProviderRegistry.mjs'
 import { inferVisionSupport } from '../providers/messageContent.mjs'
 import { safeJson } from '../utils/json.mjs'
@@ -26,6 +46,7 @@ const staticDir = join(__dirname, 'static')
 const configStore = new ConfigStore()
 const keychainStore = new KeychainStore()
 const sessionStore = new SessionStore(configStore)
+const billingStore = new BillingStore(configStore)
 const providerRegistry = createDefaultProviderRegistry()
 
 const args = new Map()
@@ -40,10 +61,12 @@ for (let index = 2; index < process.argv.length; index += 1) {
 const port = Number(args.get('port') || process.env.PORT || process.env.MODAI_WEB_PORT || 8787)
 const host = process.env.MODAI_WEB_HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1')
 const parentPid = Number(process.env.MODAI_PARENT_PID || 0)
-const workspaceDir = process.env.MODAI_WORKSPACE_DIR || process.cwd()
+const workspaceDirOverride = process.env.MODAI_WORKSPACE_DIR || ''
+let workspaceDir = resolve(workspaceDirOverride || process.env.HOME || homedir() || process.cwd())
 const runtimeProjectDir = process.env.MODAI_RUNTIME_DIR || process.cwd()
 const skillStore = new SkillStore(configStore, { cwd: runtimeProjectDir })
 const pluginStore = new PluginStore(configStore, { cwd: runtimeProjectDir })
+const execFile = promisify(execFileCallback)
 
 const server = createServer(async (request, response) => {
   try {
@@ -56,6 +79,368 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && (url.pathname === '/api/config' || url.pathname === '/api/settings')) {
       const config = await loadRuntimeConfig()
       return sendJson(response, 200, await buildClientState(config))
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/billing') {
+      return sendJson(response, 200, await billingStore.getClientState({
+        catalog: getBillingCatalog(),
+        environment: getBillingEnvironment(),
+      }))
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/workspace/outline') {
+      return sendJson(response, 200, await buildWorkspaceOutlineResponse(workspaceDir))
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/workspace/root') {
+      const body = await readJson(request)
+      try {
+        const nextRoot = await validateWorkspaceRoot(body.path)
+        const config = await configStore.update(current => {
+          current.workspace = {
+            ...(current.workspace ?? {}),
+            rootDir: nextRoot,
+          }
+          return current
+        })
+        workspaceDir = resolveConfiguredWorkspaceDir(config)
+        return sendJson(response, 200, {
+          ok: true,
+          workspaceDir,
+          outline: await buildWorkspaceOutlineResponse(workspaceDir),
+        })
+      } catch (rootError) {
+        const message = rootError instanceof Error ? rootError.message : String(rootError)
+        return sendJson(response, 400, { error: message })
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/workspace/file') {
+      const relativePath = url.searchParams.get('path') ?? ''
+      try {
+        return sendJson(response, 200, await readWorkspaceFile(relativePath))
+      } catch (fileError) {
+        const message = fileError instanceof Error ? fileError.message : String(fileError)
+        return sendJson(response, 400, { error: message })
+      }
+    }
+
+    if (request.method === 'PUT' && url.pathname === '/api/workspace/file') {
+      const body = await readJson(request)
+      try {
+        return sendJson(response, 200, await writeWorkspaceFile(body))
+      } catch (fileError) {
+        const message = fileError instanceof Error ? fileError.message : String(fileError)
+        return sendJson(response, 400, { error: message })
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/mcp/test') {
+      const body = await readJson(request)
+      const config = await loadRuntimeConfig()
+      const serverPatch = normalizeMcpServerPatch(body.server ?? {})
+      if (!serverPatch) {
+        return sendJson(response, 400, { error: 'Invalid MCP server payload' })
+      }
+
+      const savedServer = (config.mcp?.servers ?? []).find(server => server.id === serverPatch.id)
+      const effectiveServer = savedServer
+        ? {
+            ...savedServer,
+            ...serverPatch,
+            authToken: serverPatch.authToken || savedServer.authToken || '',
+            authTokenSource: serverPatch.authToken ? 'config' : (savedServer.authTokenSource ?? serverPatch.authTokenSource ?? ''),
+          }
+        : serverPatch
+
+      const diagnostic = await inspectMcpServer(effectiveServer, {
+        workspaceDir,
+      })
+      const savedServers = config.mcp?.servers ?? []
+      const nextServers = savedServers.some(server => server.id === serverPatch.id)
+        ? savedServers.map(server => (server.id === serverPatch.id ? {
+            ...server,
+            ...serverPatch,
+            authToken: serverPatch.authToken || server.authToken || '',
+            authTokenSource: serverPatch.authToken ? 'config' : server.authTokenSource || '',
+          } : server))
+        : [...savedServers, serverPatch]
+
+      return sendJson(response, 200, {
+        ok: diagnostic.ok,
+        diagnostic,
+        mcp: {
+          diagnostics: mergeMcpDiagnostics(config.mcp?.diagnostics ?? [], diagnostic),
+          servers: nextServers.map(server => serializeMcpServerForClient(server)),
+        },
+      })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/mcp/oauth/start') {
+      const body = await readJson(request)
+      const config = await loadRuntimeConfig()
+      const serverPatch = normalizeMcpServerPatch(body.server ?? {})
+      if (!serverPatch) {
+        return sendJson(response, 400, { error: 'Invalid MCP server payload' })
+      }
+
+      const savedServer = (config.mcp?.servers ?? []).find(server => server.id === serverPatch.id)
+      const effectiveServer = savedServer
+        ? {
+            ...savedServer,
+            ...serverPatch,
+            authType: 'oauth',
+          }
+        : {
+            ...serverPatch,
+            authType: 'oauth',
+          }
+      const flow = await startMcpOAuthFlow({
+        server: effectiveServer,
+        port,
+        configStore,
+      })
+      return sendJson(response, 200, flow)
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/mcp/oauth/callback') {
+      try {
+        const result = await completeMcpOAuthCallback({
+          state: url.searchParams.get('state') ?? '',
+          code: url.searchParams.get('code') ?? '',
+          error: url.searchParams.get('error') ?? '',
+          configStore,
+          keychainStore,
+        })
+        return sendHtml(response, 200, buildMcpOAuthResultPage(result))
+      } catch (oauthError) {
+        const message = oauthError instanceof Error ? oauthError.message : String(oauthError)
+        return sendHtml(response, 400, buildMcpOAuthResultPage({ ok: false, error: message }))
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/billing/trial/start') {
+      const body = await readJson(request)
+      const nextState = await billingStore.startTrial({
+        trialDays: getBillingCatalog().trialDays,
+        deviceName: String(body.deviceName ?? '').trim(),
+      })
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/billing/activate') {
+      const body = await readJson(request)
+      const licenseKey = String(body.licenseKey ?? '').trim()
+      const email = String(body.email ?? '').trim()
+      const deviceName = String(body.deviceName ?? '').trim()
+
+      let nextState
+      try {
+        nextState = await billingStore.activateStoredLicense({
+          licenseKey,
+          email,
+          deviceName,
+        })
+      } catch (localError) {
+        try {
+          const result = await activateLemonLicense({
+            licenseKey,
+            deviceName,
+          })
+          nextState = await billingStore.saveRemoteActivation({
+            source: result.source,
+            provider: 'lemon-squeezy',
+            licenseKey: result.licenseKey,
+            email: result.email,
+            planLabel: result.planLabel || result.productName,
+            activationLimit: result.activationLimit,
+            instanceId: result.instanceId,
+            expiresAt: result.expiresAt,
+            deviceName: result.instanceName || deviceName,
+            orderId: result.orderId,
+            metadata: result.raw,
+          })
+        } catch (remoteError) {
+          throw remoteError instanceof Error ? remoteError : localError
+        }
+      }
+
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/billing/checkout/card') {
+      const body = await readJson(request)
+      const planId = String(body.planId ?? '').trim()
+      const checkoutUrl = getCardCheckoutUrl(planId)
+      if (!checkoutUrl) {
+        return sendJson(response, 400, { error: 'Card checkout is not configured for this plan' })
+      }
+      return sendJson(response, 200, {
+        ok: true,
+        planId,
+        url: checkoutUrl,
+      })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/billing/checkout/crypto') {
+      const body = await readJson(request)
+      const plan = resolveBillingPlan(String(body.planId ?? '').trim())
+      const payment = await createDirectCryptoInvoice({
+        plan,
+        networkId: String(body.networkId ?? '').trim(),
+        assetId: String(body.assetId ?? '').trim(),
+        email: String(body.email ?? '').trim(),
+        deviceName: String(body.deviceName ?? '').trim(),
+        payerAddress: String(body.payerAddress ?? '').trim(),
+      })
+
+      const nextState = await billingStore.createPayment({
+        ...payment,
+        planId: plan.id,
+        planLabel: plan.label,
+      })
+
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname.startsWith('/api/billing/payments/') && url.pathname.endsWith('/refresh')) {
+      const providerPaymentId = decodeURIComponent(url.pathname.slice('/api/billing/payments/'.length, -'/refresh'.length))
+      const currentState = await billingStore.load()
+      const payment = currentState.payments.find(item => item.providerPaymentId === providerPaymentId)
+      if (!payment) {
+        return sendJson(response, 404, { error: 'Payment not found' })
+      }
+
+      return sendJson(response, 200, buildBillingResponse(currentState))
+    }
+
+    if (request.method === 'POST' && url.pathname.startsWith('/api/billing/payments/') && url.pathname.endsWith('/verify-transfer')) {
+      const providerPaymentId = decodeURIComponent(url.pathname.slice('/api/billing/payments/'.length, -'/verify-transfer'.length))
+      const currentState = await billingStore.load()
+      const payment = currentState.payments.find(item => item.providerPaymentId === providerPaymentId)
+      if (!payment) {
+        return sendJson(response, 404, { error: 'Payment not found' })
+      }
+
+      const body = await readJson(request)
+      const verification = await verifyDirectCryptoTransfer(payment, {
+        txHash: String(body.txHash ?? '').trim(),
+        payerAddress: String(body.payerAddress ?? '').trim(),
+      })
+      const plan = resolveBillingPlan(payment.planId)
+      const nextState = await billingStore.updatePaymentStatus(providerPaymentId, verification, {
+        issueLicense: isSuccessfulCryptoStatus(verification.paymentStatus),
+        source: 'crypto',
+        activationLimit: plan.activationLimit,
+      })
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname.startsWith('/api/billing/payments/') && url.pathname.endsWith('/simulate-finish')) {
+      const providerPaymentId = decodeURIComponent(url.pathname.slice('/api/billing/payments/'.length, -'/simulate-finish'.length))
+      const currentState = await billingStore.load()
+      const payment = currentState.payments.find(item => item.providerPaymentId === providerPaymentId)
+      if (!payment) {
+        return sendJson(response, 404, { error: 'Payment not found' })
+      }
+      const plan = resolveBillingPlan(payment.planId)
+      const nextState = await billingStore.updatePaymentStatus(providerPaymentId, {
+        paymentStatus: 'finished',
+        actuallyPaid: payment.payAmount,
+        outcomeAmount: payment.payAmount,
+        outcomeCurrency: payment.payCurrency,
+      }, {
+        issueLicense: true,
+        source: 'crypto',
+        activationLimit: plan.activationLimit,
+      })
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname.startsWith('/api/billing/payments/') && url.pathname.endsWith('/claim')) {
+      const providerPaymentId = decodeURIComponent(url.pathname.slice('/api/billing/payments/'.length, -'/claim'.length))
+      const body = await readJson(request)
+      const nextState = await billingStore.claimPaymentLicense({
+        providerPaymentId,
+        email: String(body.email ?? '').trim(),
+        deviceName: String(body.deviceName ?? '').trim(),
+      })
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/webhooks/lemonsqueezy') {
+      const rawBody = await readRequestBody(request)
+      const secret = String(process.env.LEMON_SQUEEZY_WEBHOOK_SECRET ?? '').trim()
+      const signature = String(request.headers['x-signature'] ?? '')
+      if (secret && !verifyLemonWebhookSignature(rawBody, signature, secret)) {
+        return sendJson(response, 401, { error: 'Invalid Lemon Squeezy signature' })
+      }
+
+      const payload = rawBody ? JSON.parse(rawBody) : {}
+      const record = extractLemonWebhookRecord(payload)
+      let nextState = await billingStore.recordWebhookEvent({
+        provider: record.provider,
+        eventName: record.eventName,
+        providerObjectId: record.providerObjectId,
+        status: record.status,
+        payload,
+      })
+
+      if (record.licenseKey) {
+        nextState = await billingStore.issueLicense({
+          source: 'lemon-squeezy',
+          provider: 'lemon-squeezy',
+          planLabel: [record.productName, record.variantName].filter(Boolean).join(' · '),
+          email: record.email,
+          activationLimit: record.activationLimit || 1,
+          expiresAt: record.expiresAt,
+          orderId: record.orderId || record.providerObjectId,
+          metadata: payload,
+          providedLicenseKey: record.licenseKey,
+        })
+      }
+
+      return sendJson(response, 200, {
+        ok: true,
+        billing: buildBillingSnapshot(nextState),
+      })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/webhooks/crypto') {
+      const rawBody = await readRequestBody(request)
+      const secret = String(process.env.NOWPAYMENTS_IPN_SECRET ?? '').trim()
+      const signature = String(request.headers['x-nowpayments-sig'] ?? request.headers['x-signature'] ?? '')
+      if (secret && !verifyNowPaymentsWebhookSignature(rawBody, signature, secret)) {
+        return sendJson(response, 401, { error: 'Invalid NOWPayments signature' })
+      }
+
+      const payload = rawBody ? JSON.parse(rawBody) : {}
+      const record = extractNowPaymentsWebhookRecord(payload)
+      let nextState = await billingStore.recordWebhookEvent({
+        provider: record.provider,
+        eventName: 'payment_status',
+        providerObjectId: record.providerPaymentId,
+        status: record.paymentStatus,
+        payload,
+      })
+
+      if (record.providerPaymentId) {
+        const stateSnapshot = await billingStore.load()
+        const payment = stateSnapshot.payments.find(item => item.providerPaymentId === record.providerPaymentId)
+        if (payment) {
+          const plan = resolveBillingPlan(payment.planId)
+          nextState = await billingStore.updatePaymentStatus(record.providerPaymentId, record, {
+            issueLicense: isSuccessfulCryptoStatus(record.paymentStatus),
+            source: 'crypto',
+            activationLimit: plan.activationLimit,
+          })
+        }
+      }
+
+      return sendJson(response, 200, {
+        ok: true,
+        billing: buildBillingSnapshot(nextState),
+      })
     }
 
     if (request.method === 'GET' && url.pathname === '/api/sessions') {
@@ -83,6 +468,34 @@ const server = createServer(async (request, response) => {
         return sendJson(response, 404, { error: 'Session not found' })
       }
       return sendJson(response, 200, { ok: true, sessionId })
+    }
+
+    if (request.method === 'PATCH' && url.pathname.startsWith('/api/tasks/')) {
+      const taskId = decodeURIComponent(url.pathname.slice('/api/tasks/'.length))
+      const currentTask = await sessionStore.getScheduledTask(taskId)
+      if (!currentTask) {
+        return sendJson(response, 404, { error: 'Task not found' })
+      }
+
+      const body = await readJson(request)
+      const title = String(body.title ?? '').trim()
+      const goal = String(body.goal ?? '').trim()
+      const constraints = String(body.constraints ?? '').trim()
+      const delivery = normalizeDeliveryInput(body.delivery)
+      const completion = String(body.completion ?? '').trim()
+      const nextTask = {
+        ...currentTask,
+        title: title || goal || currentTask.title || 'Planned task',
+        goal,
+        constraints,
+        delivery,
+        completion,
+      }
+      nextTask.status = nextTask.delivery ? 'scheduled' : 'draft'
+      nextTask.body = buildTaskBody(nextTask)
+
+      const updatedTask = await sessionStore.updateScheduledTask(taskId, nextTask)
+      return sendJson(response, 200, { ok: true, task: updatedTask })
     }
 
     if (request.method === 'DELETE' && url.pathname.startsWith('/api/tasks/')) {
@@ -123,6 +536,16 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, uploaded)
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/open-link') {
+      const body = await readJson(request)
+      const externalUrl = String(body.url ?? '').trim()
+      if (!/^https?:\/\//i.test(externalUrl)) {
+        return sendJson(response, 400, { error: 'Only http and https URLs are allowed' })
+      }
+      await execFile('open', [externalUrl])
+      return sendJson(response, 200, { ok: true, url: externalUrl })
+    }
+
     if (request.method === 'GET' && url.pathname.startsWith('/api/uploads/')) {
       const uploadId = basename(decodeURIComponent(url.pathname.slice('/api/uploads/'.length)))
       const target = join(configStore.getBaseDir(), 'uploads', uploadId)
@@ -158,6 +581,7 @@ const server = createServer(async (request, response) => {
         pluginStore,
         modelRef,
         platform: process.platform,
+        workspaceDir,
       })
       const provider = providerRegistry.create(modelRef.provider, config.providers[modelRef.provider])
       const modelStatus = describeModelAvailability(modelRef.id, config.models[modelRef.id] ?? modelRef, providerInsights)
@@ -370,14 +794,14 @@ const server = createServer(async (request, response) => {
       })
     }
 
-    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
-      return sendFile(response, join(staticDir, 'index.html'), 'text/html; charset=utf-8')
+    if ((request.method === 'GET' || request.method === 'HEAD') && (url.pathname === '/' || url.pathname === '/index.html')) {
+      return sendFile(response, join(staticDir, 'index.html'), 'text/html; charset=utf-8', request.method)
     }
 
-    if (request.method === 'GET') {
+    if (request.method === 'GET' || request.method === 'HEAD') {
       const assetPath = resolveStaticAsset(url.pathname)
       if (assetPath) {
-        return sendFile(response, assetPath, getStaticContentType(assetPath))
+        return sendFile(response, assetPath, getStaticContentType(assetPath), request.method)
       }
     }
 
@@ -416,6 +840,7 @@ installShutdownHooks()
 
 async function loadRuntimeConfig() {
   const config = await configStore.load()
+  workspaceDir = resolveConfiguredWorkspaceDir(config)
   return prepareRuntimeConfig(config, { configStore, keychainStore })
 }
 
@@ -440,6 +865,7 @@ async function buildClientState(config) {
     pluginStore,
     modelRef: selectedModel,
     platform: process.platform,
+    workspaceDir,
   })
   const [sessions, notes, tasks] = await Promise.all([
     sessionStore.listRecent(8),
@@ -497,10 +923,18 @@ async function buildClientState(config) {
       requiredMode: tool.requiredMode ?? 'ultra',
       permissionKey: tool.permissionKey ?? tool.name,
     })),
+    mcp: {
+      servers: (config.mcp?.servers ?? []).map(server => serializeMcpServerForClient(server)),
+      diagnostics: runtimeContext.mcpDiagnostics ?? [],
+    },
     models,
     sessions,
     notes,
     tasks,
+    billing: await billingStore.getClientState({
+      catalog: getBillingCatalog(),
+      environment: getBillingEnvironment(),
+    }),
     workspaceDir,
   }
 }
@@ -767,6 +1201,80 @@ async function applySettingsPatch(config, patch = {}) {
       config.plugins.active = patch.plugins.active.filter(item => typeof item === 'string')
     }
   }
+
+  if (patch.mcp && typeof patch.mcp === 'object' && Array.isArray(patch.mcp.servers)) {
+    const nextServers = patch.mcp.servers
+      .map(server => normalizeMcpServerPatch(server))
+      .filter(Boolean)
+    await applyMcpSecretUpdates(config, nextServers, { keychainStore })
+    config.mcp.servers = nextServers.map(({ clearAuthToken, ...server }) => server)
+  }
+}
+
+function normalizeMcpServerPatch(server) {
+  if (!server || typeof server !== 'object') {
+    return null
+  }
+
+  const transport = ['stdio', 'http', 'sse'].includes(server.transport) ? server.transport : 'stdio'
+  const authType = ['none', 'bearer', 'oauth'].includes(server.authType) ? server.authType : 'none'
+  return {
+    id: String(server.id ?? '').trim() || `mcp-${Date.now().toString(36)}`,
+    presetId: String(server.presetId ?? '').trim(),
+    name: String(server.name ?? '').trim() || 'Custom MCP',
+    transport,
+    url: String(server.url ?? '').trim(),
+    command: String(server.command ?? '').trim(),
+    argsText: String(server.argsText ?? '').trim(),
+    headersText: String(server.headersText ?? '').trim(),
+    authType,
+    authTokenEnv: String(server.authTokenEnv ?? '').trim(),
+    authToken: typeof server.authToken === 'string' ? server.authToken.trim() : '',
+    authTokenSource: String(server.authTokenSource ?? '').trim(),
+    oauthAuthorizationUrl: String(server.oauthAuthorizationUrl ?? '').trim(),
+    oauthTokenUrl: String(server.oauthTokenUrl ?? '').trim(),
+    oauthClientId: String(server.oauthClientId ?? '').trim(),
+    oauthClientSecretEnv: String(server.oauthClientSecretEnv ?? '').trim(),
+    oauthScopes: String(server.oauthScopes ?? '').trim(),
+    clearAuthToken: server.clearAuthToken === true,
+    enabled: server.enabled !== false,
+  }
+}
+
+function serializeMcpServerForClient(server) {
+  const authToken = typeof server.authToken === 'string' ? server.authToken.trim() : ''
+  const envToken = server.authTokenEnv ? String(process.env[server.authTokenEnv] ?? '').trim() : ''
+  return {
+    id: server.id,
+    presetId: server.presetId ?? '',
+    name: server.name,
+    transport: server.transport,
+    url: server.url ?? '',
+    command: server.command ?? '',
+    argsText: server.argsText ?? '',
+    headersText: server.headersText ?? '',
+    authType: server.authType ?? 'none',
+    authTokenEnv: server.authTokenEnv ?? '',
+    authTokenSource: server.authTokenSource ?? (authToken ? 'config' : envToken ? 'env' : ''),
+    hasAuthToken: Boolean(authToken || envToken),
+    oauthAuthorizationUrl: server.oauthAuthorizationUrl ?? '',
+    oauthTokenUrl: server.oauthTokenUrl ?? '',
+    oauthClientId: server.oauthClientId ?? '',
+    oauthClientSecretEnv: server.oauthClientSecretEnv ?? '',
+    oauthScopes: server.oauthScopes ?? '',
+    enabled: server.enabled !== false,
+  }
+}
+
+function mergeMcpDiagnostics(existing, nextDiagnostic) {
+  const items = Array.isArray(existing) ? [...existing] : []
+  const index = items.findIndex(item => item.serverId === nextDiagnostic.serverId)
+  if (index >= 0) {
+    items[index] = nextDiagnostic
+  } else {
+    items.push(nextDiagnostic)
+  }
+  return items
 }
 
 function normalizeApprovalPermissions(approvals) {
@@ -859,8 +1367,29 @@ function buildTaskSavedMessage(task, language = 'en') {
   return lines.join('\n')
 }
 
+function buildTaskBody(task) {
+  const lines = [
+    `Task: ${task.title}`,
+  ]
+
+  if (task.goal) {
+    lines.push(`Goal: ${task.goal}`)
+  }
+  if (task.constraints) {
+    lines.push(`Constraints: ${task.constraints}`)
+  }
+  if (task.delivery) {
+    lines.push(`Due: ${task.delivery}`)
+  }
+  if (task.completion) {
+    lines.push(`Completion Criteria: ${task.completion}`)
+  }
+
+  return lines.join('\n')
+}
+
 function normalizeDeliveryInput(value) {
-  const text = String(value ?? '').trim()
+  const text = String(value ?? '').trim().replace('T', ' ')
   if (!text) {
     return ''
   }
@@ -937,6 +1466,164 @@ function formatLocalDateTime(date) {
   const hour = String(date.getHours()).padStart(2, '0')
   const minute = String(date.getMinutes()).padStart(2, '0')
   return `${year}-${month}-${day} ${hour}:${minute}`
+}
+
+async function buildWorkspaceOutlineResponse(rootDir) {
+  return {
+    root: rootDir,
+    generatedAt: new Date().toISOString(),
+    nodes: await listWorkspaceNodes(rootDir, { depth: 2, maxEntries: 10, maxNodes: 180 }),
+  }
+}
+
+async function readWorkspaceFile(relativePath) {
+  const targetPath = resolveWorkspaceTarget(relativePath)
+  const fileStat = await stat(targetPath)
+  if (!fileStat.isFile()) {
+    throw new Error('Workspace target is not a file')
+  }
+  if (fileStat.size > 1_000_000) {
+    throw new Error('Workspace file is larger than the 1 MB editor limit')
+  }
+
+  const buffer = await readFile(targetPath)
+  if (buffer.includes(0)) {
+    throw new Error('Binary files are not supported in the workspace editor')
+  }
+
+  return {
+    ok: true,
+    path: relativeToWorkspace(targetPath),
+    absolutePath: targetPath,
+    content: buffer.toString('utf8'),
+    size: fileStat.size,
+    modifiedAt: fileStat.mtime.toISOString(),
+  }
+}
+
+async function writeWorkspaceFile(body = {}) {
+  const relativePath = String(body.path ?? '').trim()
+  const content = typeof body.content === 'string' ? body.content : ''
+  const targetPath = resolveWorkspaceTarget(relativePath)
+  const fileStat = await stat(targetPath)
+  if (!fileStat.isFile()) {
+    throw new Error('Workspace target is not a file')
+  }
+  await writeFile(targetPath, content, 'utf8')
+  const nextStat = await stat(targetPath)
+  return {
+    ok: true,
+    path: relativeToWorkspace(targetPath),
+    absolutePath: targetPath,
+    size: nextStat.size,
+    modifiedAt: nextStat.mtime.toISOString(),
+  }
+}
+
+function resolveWorkspaceTarget(relativePath) {
+  const source = String(relativePath ?? '').trim()
+  if (!source || source === '.') {
+    throw new Error('Workspace file path is required')
+  }
+
+  const root = resolve(workspaceDir)
+  const targetPath = resolve(root, source)
+  const rootPrefix = root.endsWith('/') ? root : `${root}/`
+  if (targetPath !== root && !targetPath.startsWith(rootPrefix)) {
+    throw new Error('Workspace path is outside the configured workspace')
+  }
+  return targetPath
+}
+
+async function validateWorkspaceRoot(value) {
+  const source = String(value ?? '').trim()
+  if (!source) {
+    throw new Error('Workspace folder path is required')
+  }
+  const targetPath = resolve(source.replace(/^~(?=\/|$)/, process.env.HOME || homedir() || '~'))
+  const rootStat = await stat(targetPath)
+  if (!rootStat.isDirectory()) {
+    throw new Error('Workspace root must be a folder')
+  }
+  return targetPath
+}
+
+function resolveConfiguredWorkspaceDir(config = {}) {
+  const configured = String(config.workspace?.rootDir ?? '').trim()
+  return resolve(workspaceDirOverride || configured || process.env.HOME || homedir() || process.cwd())
+}
+
+async function listWorkspaceNodes(currentDir, options = {}, state = { remaining: options.maxNodes ?? 180 }) {
+  if (state.remaining <= 0) {
+    return []
+  }
+
+  let entries = []
+  try {
+    entries = await readdir(currentDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const depth = options.depth ?? 2
+  const maxEntries = options.maxEntries ?? 10
+  const visibleEntries = entries
+    .filter(entry => !shouldHideWorkspaceEntry(entry.name))
+    .sort((left, right) => {
+      if (left.isDirectory() !== right.isDirectory()) {
+        return left.isDirectory() ? -1 : 1
+      }
+      return left.name.localeCompare(right.name)
+    })
+    .slice(0, maxEntries)
+
+  const nodes = []
+  for (const entry of visibleEntries) {
+    if (state.remaining <= 0) {
+      break
+    }
+    state.remaining -= 1
+    const targetPath = join(currentDir, entry.name)
+    const node = {
+      name: entry.name,
+      path: targetPath,
+      relativePath: relativeToWorkspace(targetPath),
+      type: entry.isDirectory() ? 'dir' : 'file',
+    }
+    if (entry.isDirectory() && depth > 0) {
+      node.children = await listWorkspaceNodes(targetPath, {
+        ...options,
+        depth: depth - 1,
+      }, state)
+    }
+    nodes.push(node)
+  }
+
+  return nodes
+}
+
+function shouldHideWorkspaceEntry(name) {
+  if (String(name).startsWith('.') && !['.github', '.gitignore', '.env.example'].includes(name)) {
+    return true
+  }
+
+  return [
+    '.git',
+    '.DS_Store',
+    'node_modules',
+    'dist',
+    'target',
+    '.next',
+    '.turbo',
+    '.idea',
+  ].includes(name)
+}
+
+function relativeToWorkspace(targetPath) {
+  if (!targetPath.startsWith(workspaceDir)) {
+    return targetPath
+  }
+  return targetPath.slice(workspaceDir.length).replace(/^\/+/, '') || '.'
 }
 
 async function saveUpload(body = {}) {
@@ -1027,7 +1714,7 @@ function resolveStaticAsset(pathname) {
   }
 
   const extension = extname(target).toLowerCase()
-  if (!['.html', '.js', '.css', '.svg', '.json', '.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(extension)) {
+  if (!['.html', '.js', '.css', '.svg', '.json', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.webmanifest'].includes(extension)) {
     return null
   }
 
@@ -1051,6 +1738,9 @@ function getStaticContentType(filePath) {
   if (extension === '.json') {
     return 'application/json; charset=utf-8'
   }
+  if (extension === '.webmanifest') {
+    return 'application/manifest+json; charset=utf-8'
+  }
   return detectUploadContentType(filePath)
 }
 
@@ -1068,23 +1758,91 @@ function readIsoDate(value) {
 }
 
 async function readJson(request) {
+  const raw = await readRequestBody(request)
+  return raw ? JSON.parse(raw) : {}
+}
+
+async function readRequestBody(request) {
   const chunks = []
   for await (const chunk of request) {
     chunks.push(chunk)
   }
-  const raw = Buffer.concat(chunks).toString('utf8')
-  return raw ? JSON.parse(raw) : {}
+  return Buffer.concat(chunks).toString('utf8')
 }
 
-async function sendFile(response, filePath, contentType) {
+async function sendFile(response, filePath, contentType, method = 'GET') {
   const content = await readFile(filePath)
-  response.writeHead(200, { 'content-type': contentType })
-  response.end(content)
+  response.writeHead(200, {
+    'content-type': contentType,
+    'content-length': String(content.byteLength),
+  })
+  response.end(method === 'HEAD' ? undefined : content)
 }
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' })
   response.end(safeJson(payload))
+}
+
+function sendHtml(response, statusCode, html) {
+  response.writeHead(statusCode, { 'content-type': 'text/html; charset=utf-8' })
+  response.end(html)
+}
+
+function buildMcpOAuthResultPage(result = {}) {
+  const title = result.ok ? 'MCP OAuth connected' : 'MCP OAuth failed'
+  const detail = result.ok
+    ? `${result.serverName || 'MCP connector'} is connected. You can close this window and return to modAI.`
+    : (result.error || 'The OAuth callback could not be completed.')
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtmlText(title)}</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background: #090b10; color: #f5f7fb; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: radial-gradient(circle at 20% 10%, rgba(124, 156, 255, 0.18), transparent 34%), #090b10; }
+      main { width: min(520px, calc(100vw - 32px)); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; padding: 28px; background: rgba(15,18,25,.92); box-shadow: 0 30px 80px rgba(0,0,0,.38); }
+      .eyebrow { color: #93a4c7; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; font-weight: 760; }
+      h1 { margin: 10px 0; font-size: 28px; }
+      p { color: #b7c2d8; line-height: 1.6; }
+      .status { display: inline-flex; margin-top: 14px; padding: 8px 12px; border-radius: 999px; border: 1px solid ${result.ok ? 'rgba(116,211,159,.35)' : 'rgba(255,123,123,.35)'}; color: ${result.ok ? '#74d39f' : '#ff8c8c'}; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">modAI connector auth</div>
+      <h1>${escapeHtmlText(title)}</h1>
+      <p>${escapeHtmlText(detail)}</p>
+      <div class="status">${escapeHtmlText(result.ok ? 'Ready' : 'Needs attention')}</div>
+    </main>
+  </body>
+</html>`
+}
+
+function escapeHtmlText(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function buildBillingResponse(state) {
+  return {
+    ok: true,
+    billing: buildBillingSnapshot(state),
+  }
+}
+
+function buildBillingSnapshot(state) {
+  return buildBillingClientState(state, {
+    catalog: getBillingCatalog(),
+    environment: getBillingEnvironment(),
+    now: new Date(),
+  })
 }
 
 function installParentWatch() {

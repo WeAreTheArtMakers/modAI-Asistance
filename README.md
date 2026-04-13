@@ -129,6 +129,14 @@ Main directories:
 - macOS Keychain storage for cloud provider API keys
 - local and cloud provider tabs with editable endpoints
 - project-level built-in skills in `.modai/skills`
+- MCP connectors with HTTP, stdio, legacy SSE, and OAuth-ready auth fields
+
+### Code workspace
+
+- workspace root picker for repo-scoped sessions
+- collapsible file outline for folder-first navigation
+- inline file editor and save flow inside the app
+- command palette hooks for file and workspace actions
 
 ## Local development
 
@@ -236,6 +244,10 @@ Current improvement tracks:
 - stronger memory and retrieval
 - self-improving internal workflows
 
+## Build with Love
+
+Build with Love by WeAreTheArtMakers.
+
 ## License
 
-MIT
+WeAreTheArtMakers

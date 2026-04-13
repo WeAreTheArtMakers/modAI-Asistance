@@ -361,6 +361,63 @@ export class SessionStore {
     `).all(limit)
   }
 
+  async getScheduledTask(taskId) {
+    const db = await this.ensureDb()
+    return db.prepare(`
+      SELECT
+        task_id AS taskId,
+        session_id AS sessionId,
+        mode,
+        title,
+        goal,
+        constraints,
+        delivery,
+        completion,
+        body,
+        status,
+        source,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM scheduled_tasks
+      WHERE task_id = ?
+      LIMIT 1
+    `).get(taskId) ?? null
+  }
+
+  async updateScheduledTask(taskId, patch) {
+    const db = await this.ensureDb()
+    const timestamp = new Date().toISOString()
+    const result = db.prepare(`
+      UPDATE scheduled_tasks
+      SET
+        title = ?,
+        goal = ?,
+        constraints = ?,
+        delivery = ?,
+        completion = ?,
+        body = ?,
+        status = ?,
+        updated_at = ?
+      WHERE task_id = ?
+    `).run(
+      patch.title,
+      patch.goal,
+      patch.constraints,
+      patch.delivery,
+      patch.completion,
+      patch.body,
+      patch.status,
+      timestamp,
+      taskId,
+    )
+
+    if (!result.changes) {
+      return null
+    }
+
+    return this.getScheduledTask(taskId)
+  }
+
   async deleteScheduledTask(taskId) {
     const db = await this.ensureDb()
     const result = db.prepare('DELETE FROM scheduled_tasks WHERE task_id = ?').run(taskId)

@@ -19,6 +19,7 @@ export class KeychainStore {
     this.enabled = options.enabled ?? process.platform === 'darwin'
     this.securityPath = options.securityPath ?? '/usr/bin/security'
     this.serviceName = options.serviceName ?? 'modAI.provider'
+    this.mcpServiceName = options.mcpServiceName ?? 'modAI.mcp'
   }
 
   isAvailable() {
@@ -27,6 +28,10 @@ export class KeychainStore {
 
   getAccountName(alias) {
     return `modAI:${alias}`
+  }
+
+  getMcpAccountName(serverId) {
+    return `modAI:mcp:${serverId}`
   }
 
   async getProviderApiKey(alias) {
@@ -93,6 +98,85 @@ export class KeychainStore {
         return false
       }
       throw formatSecurityError('delete', alias, error)
+    }
+  }
+
+  async getMcpAuthToken(serverId) {
+    return this.getGenericPassword(this.mcpServiceName, this.getMcpAccountName(serverId))
+  }
+
+  async setMcpAuthToken(serverId, authToken) {
+    return this.setGenericPassword(this.mcpServiceName, this.getMcpAccountName(serverId), authToken)
+  }
+
+  async deleteMcpAuthToken(serverId) {
+    return this.deleteGenericPassword(this.mcpServiceName, this.getMcpAccountName(serverId))
+  }
+
+  async getGenericPassword(serviceName, accountName) {
+    if (!this.isAvailable()) {
+      return null
+    }
+
+    try {
+      const { stdout } = await execFileAsync(this.securityPath, [
+        'find-generic-password',
+        '-a',
+        accountName,
+        '-s',
+        serviceName,
+        '-w',
+      ], { encoding: 'utf8' })
+      return stdout.trim() || null
+    } catch (error) {
+      if (isMissingKeychainItem(error)) {
+        return null
+      }
+      return null
+    }
+  }
+
+  async setGenericPassword(serviceName, accountName, value) {
+    if (!this.isAvailable()) {
+      return false
+    }
+
+    try {
+      await execFileAsync(this.securityPath, [
+        'add-generic-password',
+        '-a',
+        accountName,
+        '-s',
+        serviceName,
+        '-w',
+        value,
+        '-U',
+      ], { encoding: 'utf8' })
+      return true
+    } catch (error) {
+      throw formatSecurityError('write', accountName, error)
+    }
+  }
+
+  async deleteGenericPassword(serviceName, accountName) {
+    if (!this.isAvailable()) {
+      return false
+    }
+
+    try {
+      await execFileAsync(this.securityPath, [
+        'delete-generic-password',
+        '-a',
+        accountName,
+        '-s',
+        serviceName,
+      ], { encoding: 'utf8' })
+      return true
+    } catch (error) {
+      if (isMissingKeychainItem(error)) {
+        return false
+      }
+      throw formatSecurityError('delete', accountName, error)
     }
   }
 }

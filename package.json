@@ -20,6 +20,8 @@
     "package:mac:web": "node scripts/build-macos-app.mjs",
     "build:mac": "node scripts/build-tauri-macos-app.mjs",
     "package:mac": "node scripts/build-tauri-macos-app.mjs",
+    "build:portable": "node scripts/build-tauri-portable-app.mjs",
+    "package:portable": "node scripts/build-tauri-portable-app.mjs",
     "cargo:check": "cargo check --manifest-path src-tauri/Cargo.toml"
   },
   "engines": {

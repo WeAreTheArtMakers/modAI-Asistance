@@ -1,6 +1,6 @@
 export function createDefaultConfig() {
   return {
-    version: 9,
+    version: 10,
     defaultModel: 'ollama:llama3.2',
     language: {
       active: 'en',
@@ -17,6 +17,9 @@ export function createDefaultConfig() {
     reminders: {
       daemonEnabled: true,
       sound: 'Glass',
+    },
+    workspace: {
+      rootDir: '',
     },
     agent: {
       enabled: true,
@@ -35,6 +38,9 @@ export function createDefaultConfig() {
       userEnabled: true,
       projectEnabled: true,
       active: [],
+    },
+    mcp: {
+      servers: [],
     },
     providers: {
       ollama: {
@@ -167,6 +173,10 @@ export function mergeConfigWithDefaults(config = {}) {
       ...defaults.reminders,
       ...(config.reminders ?? {}),
     },
+    workspace: {
+      ...defaults.workspace,
+      ...(config.workspace ?? {}),
+    },
     permissions: {
       ...defaults.permissions,
       ...(config.permissions ?? {}),
@@ -185,6 +195,13 @@ export function mergeConfigWithDefaults(config = {}) {
       ...(config.plugins ?? {}),
       active: Array.isArray(config.plugins?.active) ? [...config.plugins.active] : defaults.plugins.active,
     },
+    mcp: {
+      ...defaults.mcp,
+      ...(config.mcp ?? {}),
+      servers: Array.isArray(config.mcp?.servers)
+        ? config.mcp.servers.map(server => normalizeMcpServer(server)).filter(Boolean)
+        : defaults.mcp.servers,
+    },
     providers: {
       ...defaults.providers,
       ...(config.providers ?? {}),
@@ -198,6 +215,35 @@ export function mergeConfigWithDefaults(config = {}) {
   applyLegacyUpgrades(config, merged)
   merged.version = defaults.version
   return merged
+}
+
+function normalizeMcpServer(server) {
+  if (!server || typeof server !== 'object') {
+    return null
+  }
+
+  const transport = ['stdio', 'http', 'sse'].includes(server.transport) ? server.transport : 'stdio'
+  const authType = ['none', 'bearer', 'oauth'].includes(server.authType) ? server.authType : 'none'
+  return {
+    id: String(server.id ?? '').trim() || `mcp-${Math.random().toString(16).slice(2, 10)}`,
+    presetId: String(server.presetId ?? '').trim(),
+    name: String(server.name ?? '').trim() || 'Custom MCP',
+    transport,
+    url: String(server.url ?? '').trim(),
+    command: String(server.command ?? '').trim(),
+    argsText: String(server.argsText ?? '').trim(),
+    headersText: String(server.headersText ?? '').trim(),
+    authType,
+    authTokenEnv: String(server.authTokenEnv ?? '').trim(),
+    authToken: typeof server.authToken === 'string' ? server.authToken.trim() : '',
+    authTokenSource: String(server.authTokenSource ?? '').trim(),
+    oauthAuthorizationUrl: String(server.oauthAuthorizationUrl ?? '').trim(),
+    oauthTokenUrl: String(server.oauthTokenUrl ?? '').trim(),
+    oauthClientId: String(server.oauthClientId ?? '').trim(),
+    oauthClientSecretEnv: String(server.oauthClientSecretEnv ?? '').trim(),
+    oauthScopes: String(server.oauthScopes ?? '').trim(),
+    enabled: server.enabled !== false,
+  }
 }
 
 export function createDefaultToolPermissions() {

@@ -2,6 +2,10 @@ function readInlineProviderApiKey(providerConfig) {
   return typeof providerConfig?.apiKey === 'string' ? providerConfig.apiKey.trim() : ''
 }
 
+function readInlineMcpAuthToken(serverConfig) {
+  return typeof serverConfig?.authToken === 'string' ? serverConfig.authToken.trim() : ''
+}
+
 export function stripInlineProviderSecrets(config) {
   let changed = false
   for (const providerConfig of Object.values(config.providers ?? {})) {
@@ -17,6 +21,23 @@ export function stripInlineProviderSecrets(config) {
       changed = true
     }
   }
+  for (const serverConfig of config.mcp?.servers ?? []) {
+    if (typeof serverConfig !== 'object' || !serverConfig) {
+      continue
+    }
+    if (typeof serverConfig.authTokenSource === 'string') {
+      delete serverConfig.authTokenSource
+      changed = true
+    }
+    if (typeof serverConfig.authToken === 'string') {
+      delete serverConfig.authToken
+      changed = true
+    }
+    if (typeof serverConfig.clearAuthToken === 'boolean') {
+      delete serverConfig.clearAuthToken
+      changed = true
+    }
+  }
   return changed
 }
 
@@ -27,6 +48,13 @@ export function sanitizeConfigForDisk(config) {
       continue
     }
     delete providerConfig.apiKeySource
+  }
+  for (const serverConfig of next.mcp?.servers ?? []) {
+    if (typeof serverConfig !== 'object' || !serverConfig) {
+      continue
+    }
+    delete serverConfig.authTokenSource
+    delete serverConfig.clearAuthToken
   }
   return next
 }
@@ -74,6 +102,60 @@ export async function applyProviderSecretUpdates(config, providerUpdates, { keyc
   return changed
 }
 
+export async function applyMcpSecretUpdates(config, nextServers, { keychainStore } = {}) {
+  if (!Array.isArray(nextServers)) {
+    return false
+  }
+
+  let changed = false
+  const useKeychain = Boolean(keychainStore?.isAvailable?.())
+  const existingIds = new Set((config.mcp?.servers ?? []).map(server => server.id).filter(Boolean))
+  const nextIds = new Set()
+
+  for (const server of nextServers) {
+    if (!server || typeof server !== 'object') {
+      continue
+    }
+
+    const serverId = String(server.id ?? '').trim()
+    if (!serverId) {
+      continue
+    }
+
+    nextIds.add(serverId)
+    const authToken = typeof server.authToken === 'string' ? server.authToken.trim() : ''
+
+    if (server.clearAuthToken === true) {
+      if (useKeychain) {
+        await keychainStore.deleteMcpAuthToken(serverId)
+      }
+      changed = true
+    }
+
+    if (!authToken) {
+      continue
+    }
+
+    if (useKeychain) {
+      await keychainStore.setMcpAuthToken(serverId, authToken)
+      delete server.authToken
+    }
+    changed = true
+  }
+
+  if (useKeychain) {
+    for (const serverId of existingIds) {
+      if (nextIds.has(serverId)) {
+        continue
+      }
+      await keychainStore.deleteMcpAuthToken(serverId)
+      changed = true
+    }
+  }
+
+  return changed
+}
+
 export async function prepareRuntimeConfig(config, { configStore, keychainStore } = {}) {
   const useKeychain = Boolean(keychainStore?.isAvailable?.())
   let migrated = false
@@ -90,6 +172,24 @@ export async function prepareRuntimeConfig(config, { configStore, keychainStore 
         await keychainStore.setProviderApiKey(alias, inlineApiKey)
       }
       delete config.providers[alias].apiKey
+      migrated = true
+    }
+
+    for (const serverConfig of config.mcp?.servers ?? []) {
+      if (!serverConfig || typeof serverConfig !== 'object') {
+        continue
+      }
+
+      const inlineAuthToken = readInlineMcpAuthToken(serverConfig)
+      if (!inlineAuthToken || !serverConfig.id) {
+        continue
+      }
+
+      const stored = await keychainStore.getMcpAuthToken(serverConfig.id)
+      if (!stored) {
+        await keychainStore.setMcpAuthToken(serverConfig.id, inlineAuthToken)
+      }
+      delete serverConfig.authToken
       migrated = true
     }
   }
@@ -117,6 +217,30 @@ export async function prepareRuntimeConfig(config, { configStore, keychainStore 
 
     providerConfig.apiKey = stored
     providerConfig.apiKeySource = 'keychain'
+  }
+
+  for (const serverConfig of runtimeConfig.mcp?.servers ?? []) {
+    if (!serverConfig || typeof serverConfig !== 'object') {
+      continue
+    }
+
+    const inlineAuthToken = readInlineMcpAuthToken(serverConfig)
+    if (inlineAuthToken) {
+      serverConfig.authTokenSource = 'config'
+      continue
+    }
+
+    if (!useKeychain || !serverConfig.id) {
+      continue
+    }
+
+    const stored = await keychainStore.getMcpAuthToken(serverConfig.id)
+    if (!stored) {
+      continue
+    }
+
+    serverConfig.authToken = stored
+    serverConfig.authTokenSource = 'keychain'
   }
 
   return runtimeConfig

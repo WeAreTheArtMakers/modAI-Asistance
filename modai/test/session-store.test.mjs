@@ -71,6 +71,20 @@ test('SessionStore persists sessions, message search, and notes in SQLite', asyn
   assert.equal(tasks.length, 1)
   assert.equal(tasks[0].delivery, '2026-04-03 09:00')
 
+  const updatedTask = await sessionStore.updateScheduledTask(task.taskId, {
+    ...task,
+    title: 'Haftalik rapor guncel',
+    goal: 'Raporu bugun bitir',
+    constraints: 'Sadece son veri seti',
+    delivery: '2026-04-03 11:30',
+    completion: 'PDF hazir',
+    body: 'Task: Haftalik rapor guncel',
+    status: 'scheduled',
+  })
+  assert.equal(updatedTask.title, 'Haftalik rapor guncel')
+  assert.equal(updatedTask.delivery, '2026-04-03 11:30')
+  assert.equal(updatedTask.completion, 'PDF hazir')
+
   const deleted = await sessionStore.deleteSession(sessionId)
   assert.equal(deleted, true)
 

@@ -4,20 +4,42 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>modAI</title>
+    <meta name="theme-color" content="#0b111b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="modAI" />
+    <link rel="icon" type="image/svg+xml" href="/brand-mark.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div class="shell">
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-          <img class="brand-mark" src="/brand-mark.svg" alt="modAI logo" />
-          <div class="brand-copy">
-            <div class="eyebrow" data-i18n="brandEyebrow">modAI assistant</div>
-            <h1>modAI</h1>
+          <div class="sidebar-brand-main">
+            <img class="brand-mark" src="/brand-mark.svg" alt="modAI logo" />
+            <div class="brand-copy">
+              <div class="eyebrow" data-i18n="brandEyebrow">modAI assistant</div>
+              <h1>modAI</h1>
+            </div>
           </div>
+          <button type="button" id="sidebarToggleButton" class="sidebar-toggle" aria-label="Collapse sidebar" title="Collapse sidebar">
+            <svg class="toggle-glyph" viewBox="0 0 24 24" aria-hidden="true">
+              <rect class="toggle-panel" x="4.5" y="5.25" width="4.25" height="13.5" rx="1.4"></rect>
+              <path class="toggle-line" d="M12 8.25h6"></path>
+              <path class="toggle-line" d="M12 12h4.5"></path>
+              <path class="toggle-line" d="M12 15.75h6"></path>
+              <path class="toggle-chevron" d="M14.75 8.75 11 12l3.75 3.25"></path>
+            </svg>
+          </button>
         </div>
 
-        <button type="button" id="clearButton" class="primary full-width" data-i18n="newChat">New Chat</button>
+        <button type="button" id="clearButton" class="primary full-width nav-primary-button">
+          <span class="nav-button-icon">+</span>
+          <span class="nav-button-label" data-i18n="newChat">New Chat</span>
+        </button>
 
         <section class="sidebar-section" id="chatsSection">
           <div class="sidebar-section-head">
@@ -34,18 +56,64 @@
       </aside>
 
       <main class="main-shell">
-        <header class="chat-header">
+        <header class="chat-header" id="chatHeader">
           <div class="chat-heading">
             <div class="eyebrow" data-i18n="localFirstChat">local-first chat</div>
             <h2 id="chatTitle">New chat</h2>
             <div class="chat-subtitle" id="activeSessionMeta">No messages yet</div>
+            <div class="header-context-strip">
+              <div class="header-context-pill emphasis" id="headerModelSummary" data-tone="neutral">
+                <span class="header-context-label">Model</span>
+                <strong class="header-context-value">No active model</strong>
+              </div>
+              <div class="header-context-pill" id="headerWorkspaceSummary" data-tone="neutral">
+                <span class="header-context-label">Workspace</span>
+                <strong class="header-context-value">Workspace ready</strong>
+              </div>
+              <div class="header-context-pill" id="headerSessionSummary" data-tone="neutral">
+                <span class="header-context-label">Session</span>
+                <strong class="header-context-value">New session</strong>
+              </div>
+            </div>
           </div>
 
           <div class="chat-header-actions">
-            <select id="modelSelect" class="header-select"></select>
-            <button type="button" id="toggleActivityButton" class="secondary header-action" data-i18n="activity">Activity</button>
-            <button type="button" id="toggleSettingsButton" class="secondary header-action" data-i18n="settings">Settings</button>
-            <div class="status" id="statusBox">Ready</div>
+            <div class="model-picker-shell">
+              <span class="model-picker-label">ACTIVE MODEL</span>
+              <select id="modelSelect" class="header-select"></select>
+            </div>
+            <div class="header-action-cluster">
+              <button type="button" id="commandPaletteButton" class="secondary icon-toggle" aria-label="Open command palette" title="Open command palette">
+                <svg class="toggle-glyph toggle-glyph-top" viewBox="0 0 24 24" aria-hidden="true">
+                  <path class="toggle-line" d="M8 8h8"></path>
+                  <path class="toggle-line" d="M8 12h8"></path>
+                  <path class="toggle-line" d="M8 16h5"></path>
+                  <path class="toggle-panel" d="M17.5 17.5 21 21"></path>
+                  <circle class="toggle-panel" cx="15.25" cy="15.25" r="3.25"></circle>
+                </svg>
+              </button>
+              <button type="button" id="toggleOutlineButton" class="secondary icon-toggle" aria-label="Toggle workspace outline" title="Toggle workspace outline">
+                <svg class="toggle-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect class="toggle-panel" x="4.5" y="5" width="5" height="14" rx="1.35"></rect>
+                  <path class="toggle-line" d="M12.5 8h7"></path>
+                  <path class="toggle-line" d="M12.5 12h7"></path>
+                  <path class="toggle-line" d="M12.5 16h5"></path>
+                </svg>
+              </button>
+              <button type="button" id="toggleHeaderButton" class="secondary icon-toggle" aria-label="Minimize top bar" title="Minimize top bar">
+                <svg class="toggle-glyph toggle-glyph-top" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect class="toggle-panel" x="5" y="5" width="14" height="4.25" rx="1.4"></rect>
+                  <path class="toggle-line" d="M8 14h8"></path>
+                  <path class="toggle-line" d="M10 18h4"></path>
+                  <path class="toggle-chevron" d="M12 9.75v4.5"></path>
+                </svg>
+              </button>
+              <button type="button" id="toggleActivityButton" class="secondary header-action" data-i18n="activity">Activity</button>
+              <button type="button" id="toggleSettingsButton" class="secondary header-action" data-i18n="settings">Settings</button>
+              <div class="status" id="statusBox" data-tone="ready">
+                <span class="status-copy">Ready</span>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -80,6 +148,39 @@
         </form>
       </main>
 
+      <aside class="workspace-outline hidden" id="workspaceOutline">
+        <div class="workspace-outline-head">
+          <div>
+            <div class="section-title" data-i18n="workspaceOutlineTitle">Workspace Outline</div>
+            <div class="drawer-subtitle" data-i18n="workspaceOutlineCopy">Browse key folders, jump to files, and push paths into the composer.</div>
+          </div>
+          <div class="workspace-outline-actions">
+            <button type="button" id="refreshOutlineButton" class="secondary" data-i18n="refresh">Refresh</button>
+            <button type="button" id="closeOutlineButton" class="secondary" data-i18n="close">Close</button>
+          </div>
+        </div>
+        <div class="workspace-outline-root" id="workspaceOutlineRoot">Workspace ready</div>
+        <div class="workspace-root-control">
+          <input id="workspaceRootInput" type="text" data-i18n-placeholder="workspaceRootPlaceholder" placeholder="/Users/bg/Desktop/project" />
+          <button type="button" id="saveWorkspaceRootButton" class="secondary" data-i18n="workspaceRootSave">Use folder</button>
+        </div>
+        <div class="workspace-outline-tree" id="workspaceOutlineTree"></div>
+        <section class="workspace-file-editor hidden" id="workspaceFileEditorShell">
+          <div class="workspace-file-editor-head">
+            <div>
+              <div class="section-title" id="workspaceFileTitle" data-i18n="workspaceFileEditorTitle">File Editor</div>
+              <div class="drawer-subtitle" id="workspaceFileMeta" data-i18n="workspaceFileEditorCopy">Open a text file from the outline to edit it inside this workspace.</div>
+            </div>
+            <button type="button" id="closeWorkspaceFileButton" class="secondary" data-i18n="close">Close</button>
+          </div>
+          <textarea id="workspaceFileInput" spellcheck="false" data-i18n-placeholder="workspaceFilePlaceholder" placeholder="Select a workspace file"></textarea>
+          <div class="workspace-file-editor-actions">
+            <button type="button" id="insertWorkspacePathButton" class="secondary" data-i18n="workspaceOutlineInsert">Insert path</button>
+            <button type="button" id="saveWorkspaceFileButton" class="primary" data-i18n="workspaceFileSave">Save file</button>
+          </div>
+        </section>
+      </aside>
+
       <aside class="settings-drawer hidden" id="settingsDrawer">
         <div class="drawer-header">
           <div>
@@ -108,6 +209,105 @@
             </div>
             <div class="drawer-mobile-copy" data-i18n="mobilePanelCopy">On small screens, chats and settings are combined in this panel.</div>
             <div class="session-list drawer-session-list" id="drawerSessionsPanel"></div>
+          </section>
+
+          <section class="drawer-section" data-drawer-section="general" id="launchGuideSection">
+            <div class="section-title" data-i18n="quickStartTitle">Quick Start</div>
+            <div class="drawer-subtitle" data-i18n="quickStartCopy">Install, unlock, choose a plan, connect a model, and run your first workflow.</div>
+            <ol class="guide-list">
+              <li class="guide-item">
+                <span class="guide-step">1</span>
+                <div>
+                  <strong data-i18n="guideInstallTitle">Move modAI to Applications</strong>
+                  <div class="guide-copy" data-i18n="guideInstallBody">Keep the app in Applications so updates, permissions, and future activation behave predictably.</div>
+                </div>
+              </li>
+              <li class="guide-item">
+                <span class="guide-step">2</span>
+                <div>
+                  <strong data-i18n="guideGatekeeperTitle">Allow the first launch</strong>
+                  <div class="guide-copy" data-i18n="guideGatekeeperBody">If macOS blocks the app, use Open Anyway or keep Sentinel nearby as an optional Gatekeeper utility.</div>
+                </div>
+              </li>
+              <li class="guide-item">
+                <span class="guide-step">3</span>
+                <div>
+                  <strong data-i18n="guidePaymentTitle">Choose payment and activation</strong>
+                  <div class="guide-copy" data-i18n="guidePaymentBody">The launch page should handle trial, card checkout, crypto checkout, and license delivery in one flow.</div>
+                </div>
+              </li>
+              <li class="guide-item">
+                <span class="guide-step">4</span>
+                <div>
+                  <strong data-i18n="guideProviderTitle">Connect a model provider</strong>
+                  <div class="guide-copy" data-i18n="guideProviderBody">Start with Ollama for local use, then add Gemini or Anthropic only when you need cloud reasoning.</div>
+                </div>
+              </li>
+              <li class="guide-item">
+                <span class="guide-step">5</span>
+                <div>
+                  <strong data-i18n="guideWorkflowTitle">Run a workflow pack</strong>
+                  <div class="guide-copy" data-i18n="guideWorkflowBody">Give new users a Founder, Sales, or Research starting pack so the first value appears in minutes.</div>
+                </div>
+              </li>
+            </ol>
+            <div class="guide-actions">
+              <button type="button" class="secondary" data-open-url="https://wearetheartmakers.github.io/modAI-Asistance/" data-i18n="openLaunchSite">Open launch site</button>
+              <button type="button" class="secondary" data-guide-action="providers" data-i18n="openProviderSetup">Open provider setup</button>
+              <button type="button" class="secondary" data-open-url="https://github.com/alienator88/Sentinel" data-i18n="openSentinel">Open Sentinel</button>
+            </div>
+            <div class="launch-grid">
+              <article class="launch-card">
+                <span class="launch-kicker" data-i18n="billingCardLabel">Card billing</span>
+                <strong data-i18n="billingCardTitle">Keep recurring plans simple</strong>
+                <p data-i18n="billingCardBody">Use a merchant-of-record flow for monthly and yearly plans so tax, invoicing, and failed payment recovery stay out of the app binary.</p>
+              </article>
+              <article class="launch-card">
+                <span class="launch-kicker" data-i18n="billingCryptoLabel">Stablecoin checkout</span>
+                <strong data-i18n="billingCryptoTitle">Offer USDC and USDT</strong>
+                <p data-i18n="billingCryptoBody">Crypto should be available for annual plans, founder passes, or credit bundles with immediate license delivery after payment.</p>
+              </article>
+              <article class="launch-card">
+                <span class="launch-kicker" data-i18n="billingActivationLabel">Activation</span>
+                <strong data-i18n="billingActivationTitle">Keep the first run friction low</strong>
+                <p data-i18n="billingActivationBody">Trial, purchase, and activation should feel like one guided path instead of three unrelated setup tasks.</p>
+              </article>
+            </div>
+            <div class="sentinel-note">
+              <strong data-i18n="sentinelNoteTitle">Gatekeeper support note</strong>
+              <p data-i18n="sentinelNoteBody">For advanced users who want clearer Gatekeeper visibility, recommend Sentinel as an optional companion utility in the support flow, not a requirement.</p>
+            </div>
+          </section>
+
+          <section class="drawer-section" data-drawer-section="general" id="billingSection">
+            <div class="section-title" data-i18n="billingStatusTitle">Trial and Activation</div>
+            <div id="billingPanel"></div>
+          </section>
+
+          <section class="drawer-section" data-drawer-section="general" id="workflowPackSection">
+            <div class="section-title" data-i18n="workflowPacksTitle">Workflow Packs</div>
+            <div class="drawer-subtitle" data-i18n="workflowPacksCopy">Launch with three persona packs so new users can see value before they start customizing prompts.</div>
+            <div class="launch-grid">
+              <article class="launch-card">
+                <span class="launch-kicker" data-i18n="packFounderLabel">Founder OS</span>
+                <strong data-i18n="packFounderTitle">Daily operator pack</strong>
+                <p data-i18n="packFounderBody">Inbox triage, launch checklist, follow-up drafting, meeting prep, and daily execution snapshots.</p>
+              </article>
+              <article class="launch-card">
+                <span class="launch-kicker" data-i18n="packSalesLabel">Sales Operator</span>
+                <strong data-i18n="packSalesTitle">Follow-through pack</strong>
+                <p data-i18n="packSalesBody">Lead reminders, objection handling, CRM note cleanup, and proposal follow-up flows.</p>
+              </article>
+              <article class="launch-card">
+                <span class="launch-kicker" data-i18n="packResearchLabel">Research Desk</span>
+                <strong data-i18n="packResearchTitle">Decision support pack</strong>
+                <p data-i18n="packResearchBody">Source gathering, comparison notes, synthesis, and action-list generation with memory support.</p>
+              </article>
+            </div>
+            <div class="guide-actions">
+              <button type="button" class="secondary" data-guide-action="automation" data-i18n="openAutomationGuide">Open automation tab</button>
+              <button type="button" class="secondary" data-open-url="https://wearetheartmakers.github.io/modAI-Asistance/#pricing" data-i18n="openPricingPage">Open pricing</button>
+            </div>
           </section>
 
           <section class="drawer-section" id="providersSection" data-drawer-section="general">
@@ -225,6 +425,33 @@
           </section>
 
           <section class="drawer-section" data-drawer-section="extensions">
+            <div class="section-title" data-i18n="integrationsTitle">Integrations</div>
+            <div class="drawer-subtitle" data-i18n="integrationsCopy">Keep MCP, plugins, desktop control, and skill-based workflows visible from one place.</div>
+            <div class="launch-grid integrations-grid" id="integrationsPanel"></div>
+          </section>
+
+          <section class="drawer-section" data-drawer-section="extensions">
+            <div class="provider-section-head">
+              <div>
+                <div class="section-title" data-i18n="connectorDiagnosticsTitle">Connector Diagnostics</div>
+                <div class="drawer-subtitle" data-i18n="connectorDiagnosticsCopy">Check auth readiness, connection state, and live tool discovery before the agent uses a connector.</div>
+              </div>
+            </div>
+            <div class="mcp-diagnostics" id="mcpDiagnosticsPanel"></div>
+          </section>
+
+          <section class="drawer-section" data-drawer-section="extensions">
+            <div class="provider-section-head">
+              <div>
+                <div class="section-title" data-i18n="mcpServersTitle">MCP Servers</div>
+                <div class="drawer-subtitle" data-i18n="mcpServersCopy">Add remote or local MCP connectors, keep them tidy, and save them with the rest of your workspace setup.</div>
+              </div>
+              <button type="button" class="secondary" data-mcp-action="add-server" data-i18n="mcpAddCustom">Add custom MCP</button>
+            </div>
+            <div class="mcp-list" id="mcpPanel"></div>
+          </section>
+
+          <section class="drawer-section" data-drawer-section="extensions">
             <div class="section-title" data-i18n="skillsLabel">Skills</div>
             <div class="drawer-subtitle" data-i18n="skillsCopy">Enable built-in skills or install external skills for new workflows.</div>
             <div class="field-grid skill-install-grid">
@@ -280,6 +507,52 @@
       <div class="drawer-scrim hidden" id="drawerScrim"></div>
     </div>
 
+    <div class="modal-overlay hidden" id="confirmOverlay">
+      <section class="modal-card confirm-card">
+        <div class="section-title" data-i18n="confirmAction">Confirm Action</div>
+        <h2 id="confirmTitle">Delete saved chat?</h2>
+        <p id="confirmMessage"></p>
+        <div class="modal-actions">
+          <button type="button" id="confirmCancelButton" class="secondary" data-i18n="cancel">Cancel</button>
+          <button type="button" id="confirmApproveButton" class="primary" data-i18n="confirm">Confirm</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-overlay hidden" id="taskEditorOverlay">
+      <section class="modal-card task-editor-card">
+        <div class="section-title" data-i18n="editTask">Edit Task</div>
+        <h2 id="taskEditorTitle" data-i18n="editTaskDetails">Edit task details</h2>
+        <p id="taskEditorSubtitle" data-i18n="editTaskCopy">Update the scheduled task fields below.</p>
+        <form id="taskEditorForm" class="task-editor-form">
+          <label class="field">
+            <span data-i18n="taskTitleLabel">Task title</span>
+            <input id="taskEditorTitleInput" type="text" />
+          </label>
+          <label class="field">
+            <span data-i18n="taskGoalLabel">Goal</span>
+            <textarea id="taskEditorGoalInput" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span data-i18n="taskConstraintsLabel">Constraints</span>
+            <textarea id="taskEditorConstraintsInput" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span data-i18n="taskDueLabel">Due</span>
+            <input id="taskEditorDueInput" type="datetime-local" />
+          </label>
+          <label class="field">
+            <span data-i18n="taskCompletionLabel">Completion criteria</span>
+            <textarea id="taskEditorCompletionInput" rows="3"></textarea>
+          </label>
+          <div class="modal-actions">
+            <button type="button" id="taskEditorCancelButton" class="secondary" data-i18n="cancel">Cancel</button>
+            <button type="submit" id="taskEditorSaveButton" class="primary" data-i18n="saveTaskChanges">Save Task</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div class="approval-overlay hidden" id="approvalOverlay">
       <section class="approval-card">
         <div class="section-title" data-i18n="permissionRequest">Permission Request</div>
@@ -291,6 +564,20 @@
           <button type="button" id="approvalAllowOnceButton" class="primary" data-i18n="allowOnce">Allow Once</button>
           <button type="button" id="approvalAllowAlwaysButton" class="primary" data-i18n="allowAlways">Always Allow</button>
         </div>
+      </section>
+    </div>
+
+    <div class="modal-overlay hidden" id="commandPaletteOverlay">
+      <section class="modal-card command-palette-card">
+        <div class="command-palette-head">
+          <div class="section-title" data-i18n="commandPaletteTitle">Command Palette</div>
+          <div class="command-palette-hint" data-i18n="commandPaletteHint">Jump to chats, tools, settings, and files from one compact panel.</div>
+        </div>
+        <label class="field compact-field">
+          <span data-i18n="commandPaletteSearchLabel">Search</span>
+          <input id="commandPaletteInput" type="text" data-i18n-placeholder="commandPalettePlaceholder" placeholder="Type a command, chat title, or file path" />
+        </label>
+        <div class="command-palette-results" id="commandPaletteResults"></div>
       </section>
     </div>
 

@@ -79,11 +79,7 @@ execFileSync('node', [join(rootDir, 'scripts', 'generate-brand-assets.mjs')], {
 execFileSync('cargo', ['build', '--release', '--manifest-path', join(rootDir, 'src-tauri', 'Cargo.toml')], {
   cwd: rootDir,
   stdio: 'inherit',
-  env: {
-    ...process.env,
-    CARGO_HOME: cargoHomeDir,
-    CARGO_NET_OFFLINE: 'true',
-  },
+  env: buildCargoEnv(cargoHomeDir),
 })
 
 await rm(appDir, { recursive: true, force: true })
@@ -125,4 +121,17 @@ async function copyOptional(source, target) {
     }
     throw error
   }
+}
+
+function buildCargoEnv(cargoHome) {
+  const envVars = {
+    ...process.env,
+    CARGO_HOME: cargoHome,
+  }
+
+  if (process.env.MODAI_CARGO_NET_OFFLINE !== 'false') {
+    envVars.CARGO_NET_OFFLINE = 'true'
+  }
+
+  return envVars
 }

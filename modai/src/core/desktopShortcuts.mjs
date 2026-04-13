@@ -8,14 +8,14 @@ export function createDesktopShortcut(content) {
   }
 
   const fields = parseStructuredFields(text)
+  const hasStructuredFields = Object.values(fields).some(Boolean)
   const structuredIntent = [
-    text,
     fields.gorev,
     fields.amac,
     fields.kisitlar,
     fields.tamamlanmaKriteri,
     fields.teslim,
-  ].filter(Boolean).join('\n')
+  ].filter(Boolean).join('\n') || text
 
   const chromeRequested = /\b(?:chrome|chorme|google chrome)\b/i.test(text)
   const finderShortcut = createFinderShortcut(structuredIntent)
@@ -30,7 +30,7 @@ export function createDesktopShortcut(content) {
 
   const youtubeIntent = /\byoutube\b/i.test(structuredIntent)
   const youtubeQuery = youtubeIntent
-    ? extractSearchQuery(structuredIntent, 'youtube') || deriveYoutubeQueryFromFields(fields)
+    ? (hasStructuredFields ? deriveYoutubeQueryFromFields(fields) : '') || extractSearchQuery(structuredIntent, 'youtube')
     : ''
   if (youtubeQuery) {
     return {
@@ -199,7 +199,7 @@ function deriveYoutubeQueryFromFields(fields) {
         .replace(/\byoutube\b/gi, '')
         .replace(/\b(?:video(?:lari|ları|lari)?|videolarini|sonuclari|sonuçlari)\b/gi, '')
         .replace(/\b(?:goster|göster|gelsin|gorunuyor|görünüyor|ac|aç|ziyaret et|izle|ara|arama|search|bul|bulmak|bulun|find|show|open|visit|results|visible)\b/gi, '')
-        .replace(/\b(?:olsun|gibi|icin|için)\b/gi, ''),
+        .replace(/\b(?:olsun|gibi|icin|için|on)\b/gi, ''),
     )
 
     if (cleaned && !/^\b(?:yok|none|bos|boş)\b$/i.test(cleaned)) {

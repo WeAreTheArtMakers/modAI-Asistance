@@ -62,10 +62,17 @@ a {
 .topbar,
 .hero,
 .feature-band,
+.proof-section,
 .reasons-section,
+.workflow-section,
 .screen-section,
+.workspace-section,
+.pricing-section,
 .stack-section,
+.launch-flow-section,
+.gatekeeper-section,
 .spec-section,
+.faq-section,
 .contact-section {
   width: min(1160px, calc(100% - 2rem));
   margin-inline: auto;
@@ -152,10 +159,15 @@ a {
 .contact-actions,
 .hero-metrics,
 .feature-band,
+.proof-grid,
 .reasons-grid,
 .screen-grid,
+.workflow-grid,
+.pricing-grid,
 .stack-grid,
-.spec-grid {
+.launch-flow-grid,
+.spec-grid,
+.faq-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
@@ -185,10 +197,15 @@ a {
 
 .metric,
 .feature-tile,
+.proof-card,
 .reason-card,
 .screen-card,
+.workflow-card,
+.pricing-card,
 .stack-card,
+.launch-flow-card,
 .spec-card,
+.faq-card,
 .contact-card,
 .hero-card {
   border: 1px solid var(--line);
@@ -260,7 +277,12 @@ a {
 
 .card-title,
 .feature-tile h2,
-.stack-card h3 {
+.stack-card h3,
+.pricing-card strong,
+.workflow-card strong,
+.proof-card strong,
+.launch-flow-card strong,
+.faq-card strong {
   margin: 0;
   font-size: 1.05rem;
 }
@@ -271,29 +293,50 @@ a {
 }
 
 .feature-band,
+.proof-section,
 .screen-section,
+.workflow-section,
+.workspace-section,
+.pricing-section,
 .stack-section,
+.launch-flow-section,
+.gatekeeper-section,
+.faq-section,
 .contact-section {
   margin-top: 2rem;
 }
 
 .feature-band,
 .reasons-grid,
-.stack-grid {
+.workflow-grid,
+.pricing-grid,
+.stack-grid,
+.launch-flow-grid,
+.faq-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .feature-tile,
 .reason-card,
+.proof-card,
+.workflow-card,
+.pricing-card,
 .stack-card,
-.spec-card {
+.launch-flow-card,
+.spec-card,
+.faq-card {
   padding: 1.2rem;
   border-radius: 1.3rem;
 }
 
 .reasons-section,
-.spec-section {
+.spec-section,
+.pricing-section,
+.proof-section,
+.workflow-section,
+.launch-flow-section,
+.faq-section {
   margin-top: 2rem;
 }
 
@@ -322,6 +365,46 @@ a {
   margin-top: 0.9rem;
 }
 
+.workspace-section {
+  margin-top: 2rem;
+}
+
+.workspace-layout {
+  margin-top: 1.2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.workspace-screen {
+  height: 100%;
+}
+
+.workspace-copy-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.workspace-point {
+  padding: 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 1.3rem;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.workspace-point strong {
+  display: block;
+  font-size: 1.02rem;
+}
+
+.workspace-point p {
+  margin: 0.72rem 0 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
 .contact-card {
   padding: 1.4rem;
   border-radius: 1.6rem;
@@ -332,6 +415,94 @@ a {
   margin-top: 1.2rem;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.proof-grid,
+.workflow-grid,
+.pricing-grid,
+.launch-flow-grid,
+.faq-grid {
+  margin-top: 1.2rem;
+}
+
+.proof-card span,
+.workflow-card span,
+.launch-flow-card span {
+  display: inline-flex;
+  margin-bottom: 0.7rem;
+  padding: 0.28rem 0.54rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.pricing-card strong {
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.pricing-card span {
+  display: inline-block;
+  margin-bottom: 0.7rem;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.pricing-card p,
+.workflow-card p,
+.proof-card p,
+.launch-flow-card p,
+.faq-card p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.pricing-card-featured {
+  background:
+    linear-gradient(180deg, rgba(79, 209, 197, 0.12), rgba(79, 209, 197, 0.02)),
+    var(--panel-strong);
+}
+
+.pricing-list {
+  margin: 1rem 0 0;
+  padding-left: 1rem;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.payment-rail {
+  margin-top: 1rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 1.3rem;
+  background: var(--panel);
+}
+
+.payment-rail p {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.gatekeeper-card {
+  padding: 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 1.6rem;
+  background:
+    linear-gradient(135deg, rgba(79, 209, 197, 0.12), rgba(249, 115, 22, 0.08)),
+    var(--panel-strong);
+  box-shadow: var(--shadow);
+}
+
+.gatekeeper-card p {
+  color: var(--muted);
+  line-height: 1.7;
 }
 
 .spec-card span {
@@ -359,10 +530,16 @@ a {
 @media (max-width: 980px) {
   .hero,
   .feature-band,
+  .proof-grid,
   .reasons-grid,
   .screen-grid,
+  .workspace-layout,
+  .workflow-grid,
+  .pricing-grid,
   .stack-grid,
-  .spec-grid {
+  .launch-flow-grid,
+  .spec-grid,
+  .faq-grid {
     grid-template-columns: 1fr;
   }
 

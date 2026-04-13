@@ -8,6 +8,14 @@
       name="description"
       content="modAI turns local AI, agent routing, sandboxed execution, and semantic memory into a Mac-native workspace."
     />
+    <meta name="theme-color" content="#081018" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="modAI" />
+    <link rel="icon" type="image/svg+xml" href="./assets/modai-logo.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./site.css" />
   </head>
   <body>
@@ -20,8 +28,9 @@
       </a>
       <nav class="topnav">
         <a href="#product" data-copy="navProduct">Product</a>
-        <a href="#screens" data-copy="navScreens">Screens</a>
-        <a href="#stack" data-copy="navStack">Stack</a>
+        <a href="#proof" data-copy="navProof">Proof</a>
+        <a href="#pricing" data-copy="navPricing">Pricing</a>
+        <a href="#faq" data-copy="navFaq">FAQ</a>
         <a href="#contact" data-copy="navContact">Contact</a>
       </nav>
       <div class="lang-switch" role="group" aria-label="Language">
@@ -34,13 +43,13 @@
       <section class="hero">
         <div class="hero-copy">
           <div class="eyebrow" data-copy="heroEyebrow">Mac-native AI operating layer</div>
-          <h1 data-copy="heroTitle">Local-first AI that can plan, inspect, execute, and remember.</h1>
+          <h1 data-copy="heroTitle">AI that works on your Mac, not just chats on it.</h1>
           <p class="hero-body" data-copy="heroBody">
-            modAI packages agent routing, sandboxed code execution, semantic memory, desktop control, and a cleaner workspace UI into one product for operators and technical teams.
+            modAI is a Mac-native operator workspace with local-first memory, task follow-through, desktop actions, reminders, and model routing built for founders, operators, and technical teams.
           </p>
           <div class="hero-actions">
-            <a class="primary" href="#screens" data-copy="heroPrimary">View product tour</a>
-            <a class="secondary" href="#contact" data-copy="heroSecondary">Become a launch partner</a>
+            <a class="primary" href="#proof" data-copy="heroPrimary">See buyer flow</a>
+            <a class="secondary" href="#pricing" data-copy="heroSecondary">View pricing</a>
           </div>
           <div class="hero-metrics">
             <article class="metric">
@@ -89,6 +98,35 @@
         </article>
       </section>
 
+      <section class="proof-section" id="proof">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="proofEyebrow">Proof, not promises</div>
+          <h2 data-copy="proofTitle">Show the buyer exactly how modAI moves from request to execution.</h2>
+        </div>
+        <div class="proof-grid">
+          <article class="proof-card">
+            <span data-copy="proofOneLabel">1. Intent</span>
+            <strong data-copy="proofOneTitle">The user asks for real work</strong>
+            <p data-copy="proofOneBody">Not just a question. A desktop action, a reminder, or a follow-through workflow that has to happen on the Mac.</p>
+          </article>
+          <article class="proof-card">
+            <span data-copy="proofTwoLabel">2. Control</span>
+            <strong data-copy="proofTwoTitle">modAI asks, routes, and acts</strong>
+            <p data-copy="proofTwoBody">The task is routed to the right model, approvals stay visible, and the desktop action happens with activity telemetry instead of hidden magic.</p>
+          </article>
+          <article class="proof-card">
+            <span data-copy="proofThreeLabel">3. Follow-through</span>
+            <strong data-copy="proofThreeTitle">The system remembers and reminds</strong>
+            <p data-copy="proofThreeBody">Tasks remain in the product, reminders fire while the app is open, and prior notes can be recalled semantically.</p>
+          </article>
+          <article class="proof-card">
+            <span data-copy="proofFourLabel">4. Outcome</span>
+            <strong data-copy="proofFourTitle">One workspace replaces tool switching</strong>
+            <p data-copy="proofFourBody">The buyer sees fewer tabs, fewer dropped tasks, and a Mac workflow that feels operational instead of fragmented.</p>
+          </article>
+        </div>
+      </section>
+
       <section class="reasons-section">
         <div class="section-head">
           <div class="eyebrow" data-copy="reasonsEyebrow">Why teams buy</div>
@@ -106,6 +144,30 @@
           <article class="reason-card">
             <h3 data-copy="reasonThreeTitle">It fits technical operators</h3>
             <p data-copy="reasonThreeBody">Engineers, founders, and workflow-heavy teams can move from planning to verification without leaving the same workspace.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="workflow-section" id="packs">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="workflowEyebrow">Persona packs</div>
+          <h2 data-copy="workflowTitle">Three launch packs that make the first session useful.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article class="workflow-card">
+            <span data-copy="workflowFounderLabel">Founder OS</span>
+            <strong data-copy="workflowFounderTitle">Run the day, not just the inbox</strong>
+            <p data-copy="workflowFounderBody">Meeting prep, launch lists, follow-up drafting, and reminder-heavy execution for solo operators and founders.</p>
+          </article>
+          <article class="workflow-card">
+            <span data-copy="workflowSalesLabel">Sales Operator</span>
+            <strong data-copy="workflowSalesTitle">Push every lead forward</strong>
+            <p data-copy="workflowSalesBody">Lead reminders, objection handling, CRM note cleanup, and proposal follow-up inside one desktop-first flow.</p>
+          </article>
+          <article class="workflow-card">
+            <span data-copy="workflowResearchLabel">Research Desk</span>
+            <strong data-copy="workflowResearchTitle">Turn sources into decisions</strong>
+            <p data-copy="workflowResearchBody">Source gathering, comparison notes, synthesis, and action-list generation backed by semantic recall.</p>
           </article>
         </div>
       </section>
@@ -131,6 +193,76 @@
         </div>
       </section>
 
+      <section class="workspace-section" id="workspace">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="workspaceEyebrow">Code workspace</div>
+          <h2 data-copy="workspaceTitle">A file-based coding surface that keeps the assistant inside the real project.</h2>
+        </div>
+        <div class="workspace-layout">
+          <figure class="screen-card workspace-screen">
+            <img src="./assets/screen-workspace.svg" alt="modAI code workspace screenshot" />
+            <figcaption data-copy="workspaceCaption">Collapsible outline, file editor, command palette, and MCP connectors live in the same operator surface.</figcaption>
+          </figure>
+          <div class="workspace-copy-panel">
+            <article class="workspace-point">
+              <strong data-copy="workspacePointOneTitle">Workspace root control</strong>
+              <p data-copy="workspacePointOneBody">Pick the project root, browse folders, and keep the assistant constrained to the repo you actually want to change.</p>
+            </article>
+            <article class="workspace-point">
+              <strong data-copy="workspacePointTwoTitle">Inline file editing</strong>
+              <p data-copy="workspacePointTwoBody">Open files, inspect context, save changes, and jump into command palette actions without leaving the chat flow.</p>
+            </article>
+            <article class="workspace-point">
+              <strong data-copy="workspacePointThreeTitle">Connector-ready runtime</strong>
+              <p data-copy="workspacePointThreeBody">HTTP, stdio, legacy SSE, and OAuth-ready MCP connectors turn GitHub, Figma, Notion, and browser tasks into first-class extensions.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="pricing-section" id="pricing">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="pricingEyebrow">Pricing</div>
+          <h2 data-copy="pricingTitle">Simple launch pricing with card and stablecoin support.</h2>
+        </div>
+        <div class="pricing-grid">
+          <article class="pricing-card">
+            <span data-copy="pricingStarterLabel">Starter</span>
+            <strong data-copy="pricingStarterPrice">$12/mo</strong>
+            <p data-copy="pricingStarterBody">For solo users who want local-first chat, reminders, and one clean desktop workspace.</p>
+            <ul class="pricing-list">
+              <li data-copy="pricingStarterPointOne">Local model path + basic cloud setup</li>
+              <li data-copy="pricingStarterPointTwo">Task and reminder system</li>
+              <li data-copy="pricingStarterPointThree">One workflow pack</li>
+            </ul>
+          </article>
+          <article class="pricing-card pricing-card-featured">
+            <span data-copy="pricingProLabel">Pro</span>
+            <strong data-copy="pricingProPrice">$24/mo</strong>
+            <p data-copy="pricingProBody">For operators who want desktop actions, semantic memory, and the full workflow stack.</p>
+            <ul class="pricing-list">
+              <li data-copy="pricingProPointOne">Desktop actions and activity telemetry</li>
+              <li data-copy="pricingProPointTwo">Semantic memory and model routing</li>
+              <li data-copy="pricingProPointThree">Three workflow packs</li>
+            </ul>
+          </article>
+          <article class="pricing-card">
+            <span data-copy="pricingFounderLabel">Founder Pass</span>
+            <strong data-copy="pricingFounderPrice">$299 once</strong>
+            <p data-copy="pricingFounderBody">For early adopters who want one annual commitment, launch pricing, and direct access.</p>
+            <ul class="pricing-list">
+              <li data-copy="pricingFounderPointOne">Twelve months of Pro</li>
+              <li data-copy="pricingFounderPointTwo">Priority launch support</li>
+              <li data-copy="pricingFounderPointThree">Card, USDC, or USDT payment path</li>
+            </ul>
+          </article>
+        </div>
+        <div class="payment-rail">
+          <div class="eyebrow" data-copy="paymentEyebrow">Payment rails</div>
+          <p data-copy="paymentBody">Use card billing for recurring plans and reserve USDC / USDT for founder passes, annual licenses, or credit bundles with immediate activation.</p>
+        </div>
+      </section>
+
       <section class="stack-section" id="stack">
         <div class="section-head">
           <div class="eyebrow" data-copy="stackEyebrow">What ships now</div>
@@ -149,6 +281,52 @@
             <h3 data-copy="stackCardThreeTitle">Memory that compounds</h3>
             <p data-copy="stackCardThreeBody">Notes and prior sessions can be searched semantically, turning the assistant into an accumulating operational system.</p>
           </article>
+        </div>
+      </section>
+
+      <section class="launch-flow-section">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="launchFlowEyebrow">Buyer flow</div>
+          <h2 data-copy="launchFlowTitle">Make download, payment, activation, and first value feel like one path.</h2>
+        </div>
+        <div class="launch-flow-grid">
+          <article class="launch-flow-card">
+            <span data-copy="launchFlowStepOne">Step 1</span>
+            <strong data-copy="launchFlowTitleOne">Download and move to Applications</strong>
+            <p data-copy="launchFlowBodyOne">Keep the install simple: drag, launch, and start. No account wall before the product is visible.</p>
+          </article>
+          <article class="launch-flow-card">
+            <span data-copy="launchFlowStepTwo">Step 2</span>
+            <strong data-copy="launchFlowTitleTwo">Handle Gatekeeper clearly</strong>
+            <p data-copy="launchFlowBodyTwo">Tell users exactly how to use Open Anyway, and mention Sentinel as an optional utility for users who want extra Gatekeeper visibility.</p>
+          </article>
+          <article class="launch-flow-card">
+            <span data-copy="launchFlowStepThree">Step 3</span>
+            <strong data-copy="launchFlowTitleThree">Start trial or pay</strong>
+            <p data-copy="launchFlowBodyThree">The launch page should present trial, card checkout, and stablecoin checkout without bouncing users through multiple support steps.</p>
+          </article>
+          <article class="launch-flow-card">
+            <span data-copy="launchFlowStepFour">Step 4</span>
+            <strong data-copy="launchFlowTitleFour">Activate and connect a model</strong>
+            <p data-copy="launchFlowBodyFour">License delivery and provider setup should happen in minutes so the user reaches the product, not another setup maze.</p>
+          </article>
+          <article class="launch-flow-card">
+            <span data-copy="launchFlowStepFive">Step 5</span>
+            <strong data-copy="launchFlowTitleFive">Run a persona pack immediately</strong>
+            <p data-copy="launchFlowBodyFive">Founder, Sales, and Research packs should show value in the first session instead of waiting for prompt engineering.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="gatekeeper-section">
+        <div class="gatekeeper-card">
+          <div class="eyebrow" data-copy="gatekeeperEyebrow">Gatekeeper guidance</div>
+          <h2 data-copy="gatekeeperTitle">Recommend Sentinel as an optional Gatekeeper companion, not a dependency.</h2>
+          <p data-copy="gatekeeperBody">For direct macOS distribution, keep the first-launch instructions simple: Open Anyway is the default path. For advanced users who want a cleaner view of Gatekeeper state, point them to Sentinel as an optional utility in your support flow.</p>
+          <div class="contact-actions">
+            <a class="secondary" href="https://github.com/alienator88/Sentinel" target="_blank" rel="noreferrer" data-copy="gatekeeperPrimary">Open Sentinel on GitHub</a>
+            <a class="secondary" href="https://developer.apple.com/macos/distribution/" target="_blank" rel="noreferrer" data-copy="gatekeeperSecondary">Read Apple distribution docs</a>
+          </div>
         </div>
       </section>
 
@@ -176,16 +354,37 @@
         </div>
       </section>
 
+      <section class="faq-section" id="faq">
+        <div class="section-head">
+          <div class="eyebrow" data-copy="faqEyebrow">FAQ</div>
+          <h2 data-copy="faqTitle">Answer the objections before the buyer asks them live.</h2>
+        </div>
+        <div class="faq-grid">
+          <article class="faq-card">
+            <strong data-copy="faqGatekeeperTitle">What if Gatekeeper blocks the app?</strong>
+            <p data-copy="faqGatekeeperBody">Tell users to use Open Anyway on the first launch. For advanced users who want clearer Gatekeeper controls, recommend Sentinel as an optional support utility, not a dependency.</p>
+          </article>
+          <article class="faq-card">
+            <strong data-copy="faqCryptoTitle">Can I pay with crypto?</strong>
+            <p data-copy="faqCryptoBody">Yes. Keep recurring plans on card billing and use USDC or USDT for annual licenses, founder passes, or credit bundles with immediate activation delivery.</p>
+          </article>
+          <article class="faq-card">
+            <strong data-copy="faqDataTitle">Does modAI require cloud models?</strong>
+            <p data-copy="faqDataBody">No. The local path should work with Ollama first. Cloud providers are optional when the buyer needs stronger vision, code, or reasoning.</p>
+          </article>
+        </div>
+      </section>
+
       <section class="contact-section" id="contact">
         <div class="contact-card">
           <div class="eyebrow" data-copy="contactEyebrow">Launch offer</div>
-          <h2 data-copy="contactTitle">Ready for GitHub Pages, demos, and buyer conversations.</h2>
+          <h2 data-copy="contactTitle">Ready for launch pages, demo calls, and direct sales.</h2>
           <p data-copy="contactBody">
-            Publish this folder through GitHub Pages, attach the desktop build, and use the bilingual site as the public product front while the repo keeps evolving.
+            Publish this folder through GitHub Pages, connect payment and activation on the launch site, and let the desktop app guide users from install to first workflow.
           </p>
           <div class="contact-actions">
-            <a class="primary" href="mailto:hello@modai.app" data-copy="contactPrimary">Request a private walkthrough</a>
-            <a class="secondary" href="../README.md" data-copy="contactSecondary">Read the project README</a>
+            <a class="primary" href="mailto:modartcollective@gmail.com" data-copy="contactPrimary">Request a private walkthrough</a>
+            <a class="secondary" href="https://github.com/WeAreTheArtMakers/modAI-Asistance#readme" target="_blank" rel="noreferrer" data-copy="contactSecondary">Read the technical README</a>
           </div>
         </div>
       </section>

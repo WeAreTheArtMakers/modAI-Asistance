@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
+import { homedir } from 'node:os'
 
 import { AppState } from './AppState.mjs'
 import { createRuntimeContext } from './runtimeContext.mjs'
@@ -23,7 +24,7 @@ export class ModAIApp {
     this.skillStore = options.skillStore ?? new SkillStore(this.configStore)
     this.pluginStore = options.pluginStore ?? new PluginStore(this.configStore)
     this.providerRegistry = options.providerRegistry ?? createDefaultProviderRegistry()
-    this.workspaceDir = options.workspaceDir ?? process.env.MODAI_WORKSPACE_DIR ?? process.cwd()
+    this.workspaceDir = options.workspaceDir ?? process.env.MODAI_WORKSPACE_DIR ?? process.env.HOME ?? homedir() ?? process.cwd()
   }
 
   async run(argv) {
@@ -613,6 +614,7 @@ export class ModAIApp {
       pluginStore: this.pluginStore,
       modelRef,
       platform: process.platform,
+      workspaceDir: this.workspaceDir,
     })
   }
 

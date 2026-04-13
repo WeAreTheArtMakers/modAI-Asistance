@@ -76,6 +76,22 @@ fn find_available_port() -> u16 {
 }
 
 fn resolve_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, Box<dyn Error>> {
+    if let Some(custom) = env::var_os("MODAI_RUNTIME_DIR") {
+        let runtime_dir = PathBuf::from(custom);
+        if runtime_dir.exists() {
+            return Ok(runtime_dir);
+        }
+    }
+
+    if let Ok(executable_path) = env::current_exe() {
+        if let Some(executable_dir) = executable_path.parent() {
+            let sibling_runtime = executable_dir.join("runtime");
+            if sibling_runtime.exists() {
+                return Ok(sibling_runtime);
+            }
+        }
+    }
+
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bundled_runtime = resource_dir.join("runtime");
         if bundled_runtime.exists() {

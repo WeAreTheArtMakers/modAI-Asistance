@@ -106,6 +106,27 @@ export function summarizeTitle(value, fallback = 'New chat') {
   return text.length <= 42 ? text : `${text.slice(0, 42)}…`
 }
 
+export function summarizeWorkspacePath(value) {
+  const text = String(value ?? '').trim()
+  if (!text) {
+    return ''
+  }
+
+  const normalized = text.replace(/^\/Users\/[^/]+/, '~')
+  if (normalized.length <= 24) {
+    return normalized
+  }
+
+  const parts = normalized.split('/').filter(Boolean)
+  if (normalized.startsWith('~/') && parts.length >= 2) {
+    return `~/${parts.slice(-2).join('/')}`
+  }
+  if (parts.length >= 2) {
+    return `…/${parts.slice(-2).join('/')}`
+  }
+  return summarizeTitle(normalized, normalized)
+}
+
 export function normalizeSteps(value) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.max(1, Math.min(12, Math.round(parsed))) : 6

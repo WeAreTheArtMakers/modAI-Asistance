@@ -2,6 +2,7 @@ import { AgentRunner } from './AgentRunner.mjs'
 import { ToolRegistry } from './ToolRegistry.mjs'
 import { createSystemPrompt } from '../prompts/systemPrompt.mjs'
 import { createBuiltinTools } from '../tools/builtinTools.mjs'
+import { createMcpRuntime } from '../services/mcpRuntime.mjs'
 import { createPluginTools } from '../services/PluginStore.mjs'
 import { buildSkillPrompt, filterActiveSkills } from '../services/SkillStore.mjs'
 
@@ -12,14 +13,20 @@ export async function createRuntimeContext({
   pluginStore,
   modelRef,
   platform = process.platform,
+  workspaceDir,
 }) {
   const skills = skillStore ? await skillStore.list(config) : []
   const plugins = pluginStore ? await pluginStore.list(config) : []
   const activeSkills = filterActiveSkills(skills, config.skills?.active)
   const activePlugins = filterActivePlugins(plugins, config.plugins?.active)
+  const mcpRuntime = await createMcpRuntime({
+    servers: config.mcp?.servers ?? [],
+    workspaceDir,
+  })
   const tools = [
     ...createBuiltinTools(),
     ...createPluginTools(activePlugins),
+    ...mcpRuntime.tools,
   ]
   const toolRegistry = new ToolRegistry(tools)
   const agentRunner = new AgentRunner({ toolRegistry })
@@ -41,12 +48,14 @@ export async function createRuntimeContext({
     activeSkills,
     plugins,
     activePlugins,
+    mcpDiagnostics: mcpRuntime.diagnostics,
     systemPrompt,
     runtime: {
       mode: config.mode?.active ?? 'pro',
       permissions: config.permissions?.tools ?? {},
       activeSkillIds: activeSkills.map(skill => skill.id),
       activePluginIds: activePlugins.map(plugin => plugin.id),
+      activeMcpServerIds: mcpRuntime.diagnostics.filter(item => item.ok).map(item => item.serverId),
     },
     configStore,
   }

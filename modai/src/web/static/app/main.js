@@ -18,9 +18,11 @@ import {
   renderInline,
   serializeMessageContent,
   summarizeTitle,
+  summarizeWorkspacePath,
 } from './utils.js'
 import {
   renderAdvancedProviderPanel,
+  renderBillingPanelMarkup,
   renderNoteCardMarkup,
   renderProviderCardMarkup,
   renderSessionCardMarkup,
@@ -29,6 +31,8 @@ import {
 
 const {
   shell,
+  sidebar,
+  chatHeader,
   modeSelect,
   assistantProfileSelect,
   themeSelect,
@@ -52,8 +56,12 @@ const {
   skillsPanel,
   pluginsPanel,
   toolsPanel,
+  integrationsPanel,
+  mcpPanel,
+  mcpDiagnosticsPanel,
   memorySessionsPanel,
   drawerSessionsPanel,
+  billingPanel,
   memoryNotesPanel,
   scheduledTasksPanel,
   saveSettingsButton,
@@ -63,6 +71,19 @@ const {
   statusBox,
   sendButton,
   clearButton,
+  confirmOverlay,
+  confirmTitle,
+  confirmMessage,
+  confirmCancelButton,
+  confirmApproveButton,
+  taskEditorOverlay,
+  taskEditorForm,
+  taskEditorTitleInput,
+  taskEditorGoalInput,
+  taskEditorConstraintsInput,
+  taskEditorDueInput,
+  taskEditorCompletionInput,
+  taskEditorCancelButton,
   approvalOverlay,
   approvalTitle,
   approvalMessage,
@@ -71,10 +92,20 @@ const {
   approvalAllowOnceButton,
   approvalAllowAlwaysButton,
   activeSessionMeta,
+  headerModelSummary,
+  headerWorkspaceSummary,
+  headerSessionSummary,
   memorySessionBadge,
   connectionSummary,
   workspaceSummary,
   chatTitle,
+  commandPaletteButton,
+  commandPaletteOverlay,
+  commandPaletteInput,
+  commandPaletteResults,
+  sidebarToggleButton,
+  toggleHeaderButton,
+  toggleOutlineButton,
   toggleSettingsButton,
   closeSettingsButton,
   settingsSizeButton,
@@ -87,6 +118,20 @@ const {
   activitySummary,
   toggleActivityButton,
   activityHeaderButton,
+  workspaceOutline,
+  workspaceOutlineRoot,
+  workspaceRootInput,
+  saveWorkspaceRootButton,
+  workspaceOutlineTree,
+  workspaceFileEditorShell,
+  workspaceFileTitle,
+  workspaceFileMeta,
+  workspaceFileInput,
+  insertWorkspacePathButton,
+  saveWorkspaceFileButton,
+  closeWorkspaceFileButton,
+  refreshOutlineButton,
+  closeOutlineButton,
   attachImageButton,
   imageInput,
   taskModeButton,
@@ -107,6 +152,46 @@ const {
 } = elements
 
 const state = createInitialState()
+let confirmDialogResolve = null
+let taskEditorResolve = null
+const FIRST_RUN_GUIDE_KEY = 'modai-first-run-guide-v1'
+const MCP_PRESETS = {
+  github: {
+    id: 'github',
+    name: 'GitHub MCP',
+    transport: 'http',
+    url: 'https://api.githubcopilot.com/mcp/',
+    authType: 'bearer',
+    authTokenEnv: 'GITHUB_TOKEN',
+    headersText: '{\n  "Authorization": "Bearer YOUR_GITHUB_PAT"\n}',
+    docsUrl: 'https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/set-up-the-github-mcp-server',
+  },
+  notion: {
+    id: 'notion',
+    name: 'Notion MCP',
+    transport: 'http',
+    url: 'https://mcp.notion.com/mcp',
+    headersText: '',
+    docsUrl: 'https://developers.notion.com/guides/mcp/get-started-with-mcp',
+  },
+  figma: {
+    id: 'figma',
+    name: 'Figma MCP',
+    transport: 'http',
+    url: 'https://mcp.figma.com/mcp',
+    headersText: '',
+    docsUrl: 'https://help.figma.com/hc/en-us/articles/32132100833559-Guide-to-the-Figma-MCP-server',
+  },
+  browser: {
+    id: 'browser',
+    name: 'Browser bridge',
+    transport: 'stdio',
+    command: '',
+    argsText: '',
+    headersText: '',
+    docsUrl: '',
+  },
+}
 
 const I18N = {
   en: {
@@ -126,6 +211,123 @@ const I18N = {
     close: 'Close',
     panel: 'Panel',
     mobilePanelCopy: 'On small screens, chats and settings are combined in this panel.',
+    quickStartTitle: 'Quick Start',
+    quickStartCopy: 'Install, unlock, choose a plan, connect a model, and run your first workflow.',
+    guideInstallTitle: 'Move modAI to Applications',
+    guideInstallBody: 'Keep the app in Applications so updates, permissions, and future activation behave predictably.',
+    guideGatekeeperTitle: 'Allow the first launch',
+    guideGatekeeperBody: 'If macOS blocks the app, use Open Anyway or keep Sentinel nearby as an optional Gatekeeper utility.',
+    guidePaymentTitle: 'Choose payment and activation',
+    guidePaymentBody: 'The launch page should handle trial, card checkout, crypto checkout, and license delivery in one flow.',
+    guideProviderTitle: 'Connect a model provider',
+    guideProviderBody: 'Start with Ollama for local use, then add Gemini or Anthropic only when you need cloud reasoning.',
+    guideWorkflowTitle: 'Run a workflow pack',
+    guideWorkflowBody: 'Give new users a Founder, Sales, or Research starting pack so the first value appears in minutes.',
+    openLaunchSite: 'Open launch site',
+    openProviderSetup: 'Open provider setup',
+    openSentinel: 'Open Sentinel',
+    billingCardLabel: 'Card billing',
+    billingCardTitle: 'Keep recurring plans simple',
+    billingCardBody: 'Use a merchant-of-record flow for monthly and yearly plans so tax, invoicing, and failed payment recovery stay out of the app binary.',
+    billingCryptoLabel: 'Stablecoin checkout',
+    billingCryptoTitle: 'Offer USDC and USDT',
+    billingCryptoBody: 'Crypto should be available for annual plans, founder passes, or credit bundles with immediate license delivery after payment.',
+    billingActivationLabel: 'Activation',
+    billingActivationTitle: 'Keep the first run friction low',
+    billingActivationBody: 'Trial, purchase, and activation should feel like one guided path instead of three unrelated setup tasks.',
+    billingStatusTitle: 'Trial and Activation',
+    billingActivateTitle: 'Start trial or activate',
+    billingActivateCopy: 'A new user should be able to start the trial, paste a license key, or continue from a completed payment without leaving the app.',
+    billingDeviceLabel: 'Device',
+    billingEmailLabel: 'Email',
+    billingPlanLabel: 'Plan',
+    billingExpiryLabel: 'Expires',
+    billingLicenseKeyLabel: 'License key',
+    billingStartTrial: 'Start 7-day trial',
+    billingActivateButton: 'Activate license',
+    billingCardRailTitle: 'Card checkout',
+    billingCardRailCopy: 'Use Lemon Squeezy for recurring card billing and instant license delivery on one-time plans.',
+    billingCardSetupNeeded: 'Add Lemon Squeezy checkout URLs to enable card purchases.',
+    billingCryptoRailTitle: 'USDC / USDT checkout',
+    billingCryptoRailCopy: 'Create a crypto invoice, watch the payment state, and claim the issued license on this device.',
+    billingCryptoModeLive: 'Live direct-wallet checkout is enabled. Send the exact quoted amount and verify the on-chain transfer to issue the license.',
+    billingCryptoModeSandbox: 'Crypto checkout is still in local test mode. Configure live rails before selling the app.',
+    billingCryptoPlanTitle: 'Crypto plan',
+    billingCryptoCurrencyLabel: 'Stablecoin',
+    billingNetworkLabel: 'Network',
+    billingNetworkVerificationReady: '{network} is ready for automatic transfer verification.',
+    billingNetworkVerificationNeeded: '{network} needs {setting} before transfer verification can issue licenses.',
+    billingPayerWalletLabel: 'Payer wallet (optional)',
+    billingPayerWalletPlaceholder: 'Sender wallet used for the payment',
+    billingRecipientHint: '{network} invoice address: {address}',
+    billingCreateCryptoPayment: 'Create crypto payment',
+    billingLatestPaymentTitle: 'Latest payment',
+    billingPayAmountLabel: 'Pay amount',
+    billingPaymentUpdatedLabel: 'Updated',
+    billingQuoteExpiryLabel: 'Quote expires',
+    billingRefreshPayment: 'Refresh status',
+    billingSimulatePayment: 'Simulate paid',
+    billingApplyLicense: 'Apply license',
+    billingLicenseReady: 'License ready: {key}',
+    billingStatusWaitingPayment: 'awaiting transfer',
+    billingStatusPaid: 'payment received',
+    billingStatusFailed: 'payment issue',
+    billingStepSendTitle: 'Send the exact quoted amount',
+    billingStepSendBody: 'Transfer exactly {amount} from your wallet. The quoted amount is unique for this invoice.',
+    billingStepAddressTitle: 'Use the invoice address',
+    billingStepAddressBody: 'Send only on {network} to the address shown below.',
+    billingStepVerifyTitle: 'Paste the transaction hash',
+    billingStepVerifyBody: 'After the transfer is confirmed on-chain, paste the transaction hash and verify the payment.',
+    billingCopyAmount: 'Copy amount',
+    billingCopyAddress: 'Copy address',
+    billingCopied: 'Copied to clipboard',
+    billingTxHashLabel: 'Transaction hash',
+    billingTxHashPlaceholder: 'Paste the on-chain transaction hash',
+    billingTxHashHint: 'Professional flow: create the invoice, send the exact quoted amount, then paste the transaction hash for verification.',
+    billingTxHashHintWaiting: 'This invoice is waiting for a real on-chain payment. Send the exact quoted amount, then paste the transaction hash below.',
+    billingTxHashRequired: 'Transaction hash is required.',
+    billingVerifyTransfer: 'Verify transfer',
+    billingVerifyingTransfer: 'Verifying transfer...',
+    billingTransferVerified: 'Transfer verified',
+    billingOpenExplorer: 'Open explorer',
+    billingStatusActive: 'Active license',
+    billingStatusTrial: 'Trial running',
+    billingStatusExpired: 'Access expired',
+    billingStatusInactive: 'No license yet',
+    billingPillActive: 'licensed',
+    billingPillTrial: 'trial',
+    billingPillExpired: 'expired',
+    billingPillInactive: 'inactive',
+    billingActiveCopy: 'This device is activated through {source}. Current plan: {plan}.',
+    billingTrialCopy: 'The free trial is active. {days} day(s) remain before activation is required.',
+    billingExpiredCopy: 'Trial or paid access has expired. Activate a license or complete a payment to continue.',
+    billingInactiveCopy: 'No active trial or license is attached to this device yet.',
+    billingUnset: 'Not set',
+    billingTrialStarted: 'Trial started',
+    billingActivating: 'Activating license...',
+    billingActivated: 'License activated',
+    billingStartingCrypto: 'Creating crypto payment...',
+    billingCryptoReady: 'Crypto payment created',
+    billingRefreshingPayment: 'Refreshing payment...',
+    billingPaymentUpdated: 'Payment state refreshed',
+    billingClaimingLicense: 'Applying license...',
+    billingClaimed: 'License applied',
+    billingOpeningCheckout: 'Opening checkout...',
+    sentinelNoteTitle: 'Gatekeeper support note',
+    sentinelNoteBody: 'For advanced users who want clearer Gatekeeper visibility, recommend Sentinel as an optional companion utility in the support flow, not a requirement.',
+    workflowPacksTitle: 'Workflow Packs',
+    workflowPacksCopy: 'Launch with three persona packs so new users can see value before they start customizing prompts.',
+    packFounderLabel: 'Founder OS',
+    packFounderTitle: 'Daily operator pack',
+    packFounderBody: 'Inbox triage, launch checklist, follow-up drafting, meeting prep, and daily execution snapshots.',
+    packSalesLabel: 'Sales Operator',
+    packSalesTitle: 'Follow-through pack',
+    packSalesBody: 'Lead reminders, objection handling, CRM note cleanup, and proposal follow-up flows.',
+    packResearchLabel: 'Research Desk',
+    packResearchTitle: 'Decision support pack',
+    packResearchBody: 'Source gathering, comparison notes, synthesis, and action-list generation with memory support.',
+    openAutomationGuide: 'Open automation tab',
+    openPricingPage: 'Open pricing',
     providersLabel: 'Providers',
     providersCopy: 'Manage local models, cloud providers, and API key storage.',
     runtimeLabel: 'Runtime',
@@ -181,6 +383,8 @@ const I18N = {
     noTasks: 'No scheduled tasks.',
     newSessionBadge: 'New session',
     sessionActive: 'Session active',
+    headerSessionLabel: 'Session',
+    headerModelLabel: 'Model',
     noMessagesYet: 'No messages yet',
     messagesLabel: 'messages',
     workspaceLabel: 'Workspace',
@@ -234,11 +438,30 @@ const I18N = {
     settingsSaving: 'Saving settings...',
     settingsSaved: 'Settings saved',
     deleteChatConfirm: 'Delete this saved chat?',
+    deleteChatConfirmTitle: 'Delete saved chat',
+    deleteChatConfirmBody: 'Delete the old chat "{title}"? This cannot be undone.',
     deleteTaskConfirm: 'Delete this scheduled task?',
+    deleteTaskConfirmTitle: 'Delete scheduled task',
+    deleteTaskConfirmBody: 'Delete the task "{title}"? This cannot be undone.',
     deletingChat: 'Deleting chat...',
     deletedChat: 'Chat deleted',
     deletingTask: 'Deleting task...',
     deletedTask: 'Task deleted',
+    editTask: 'Edit Task',
+    editingTask: 'Saving task...',
+    taskUpdated: 'Task updated',
+    confirmAction: 'Confirm Action',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    editTaskDetails: 'Edit task details',
+    editTaskCopy: 'Update the scheduled task fields below.',
+    taskTitleLabel: 'Task title',
+    taskGoalLabel: 'Goal',
+    taskConstraintsLabel: 'Constraints',
+    taskDueLabel: 'Due',
+    taskCompletionLabel: 'Completion criteria',
+    saveTaskChanges: 'Save Task',
+    taskTitleRequired: 'Task title is required.',
     loadingChat: 'Loading chat...',
     loadedChat: 'Chat loaded · {model}',
     error: 'Error',
@@ -283,11 +506,122 @@ const I18N = {
     skillFileLoaded: 'Skill file loaded',
     generalTab: 'General',
     automationTab: 'Automation',
-    extensionsTab: 'Extensions',
+    extensionsTab: 'Integrations',
+    collapseSidebar: 'Collapse sidebar',
+    expandSidebar: 'Expand sidebar',
+    minimizeTopBar: 'Minimize top bar',
+    restoreTopBar: 'Restore top bar',
+    integrationsTitle: 'Integrations',
+    integrationsCopy: 'Keep MCP, plugins, desktop control, and skill-based workflows visible from one tight operator surface.',
+    integrationsDesktopLabel: 'Desktop control',
+    integrationsDesktopBody: 'Browser actions, screenshots, files, and computer-use flows stay accessible from the same operator surface.',
+    integrationsPluginsLabel: 'Plugins',
+    integrationsPluginsBody: 'Active plugins should become one-click integrations instead of hidden settings.',
+    integrationsSkillsLabel: 'Skills',
+    integrationsSkillsBody: 'Package repeatable workflows like GitHub review, research, and follow-up as reusable skills.',
+    integrationsMcpLabel: 'MCP servers',
+    integrationsMcpBody: 'Remote and local connectors should be configurable here instead of living as a static suggestion.',
+    integrationsActiveCount: '{count} active',
+    integrationsReadyCount: '{count} ready',
+    mcpServersTitle: 'MCP Servers',
+    mcpServersCopy: 'Add remote or local MCP connectors, enable only the ones you trust, and keep setup in the same settings flow.',
+    mcpAddCustom: 'Add custom MCP',
+    mcpPresetLabel: 'Quick presets',
+    mcpEmpty: 'No MCP servers yet. Add a preset or create a custom connector.',
+    mcpPresetGithub: 'GitHub',
+    mcpPresetNotion: 'Notion',
+    mcpPresetFigma: 'Figma',
+    mcpPresetBrowser: 'Browser',
+    mcpPresetGithubBody: 'Remote GitHub MCP with optional PAT header support.',
+    mcpPresetNotionBody: 'Hosted Notion MCP over remote HTTP with OAuth.',
+    mcpPresetFigmaBody: 'Hosted Figma MCP for design context and Dev Mode flows.',
+    mcpPresetBrowserBody: 'Custom browser or Playwright bridge for local automation.',
+    mcpEnabled: 'Enabled',
+    mcpDisabled: 'Disabled',
+    mcpReady: 'Configured',
+    mcpNeedsSetup: 'Needs setup',
+    mcpNameLabel: 'Connector name',
+    mcpTransportLabel: 'Transport',
+    mcpUrlLabel: 'Remote URL',
+    mcpCommandLabel: 'Command',
+    mcpArgsLabel: 'Arguments',
+    mcpHeadersLabel: 'Headers JSON',
+    mcpRemove: 'Remove',
+    mcpOpenDocs: 'Docs',
+    mcpTransportHttp: 'Remote HTTP',
+    mcpTransportSse: 'Legacy SSE',
+    mcpTransportStdio: 'Local stdio',
+    mcpAuthLabel: 'Auth',
+    mcpAuthNone: 'No auth',
+    mcpAuthBearer: 'Bearer token',
+    mcpAuthOauth: 'OAuth / PKCE',
+    mcpAuthTokenEnvLabel: 'Token env var',
+    mcpAuthTokenLabel: 'Token',
+    mcpAuthTokenPlaceholder: 'Paste a bearer token to store securely',
+    mcpClearToken: 'Clear token',
+    mcpOauthAuthorizationUrlLabel: 'Authorization URL',
+    mcpOauthTokenUrlLabel: 'Token URL',
+    mcpOauthClientIdLabel: 'Client ID',
+    mcpOauthClientSecretEnvLabel: 'Client secret env',
+    mcpOauthScopesLabel: 'Scopes',
+    mcpOauthAuthorize: 'Authorize OAuth',
+    mcpOauthStarting: 'Opening OAuth...',
+    mcpOauthStarted: 'OAuth opened in browser',
+    mcpOauthHint: 'Leave endpoints empty to use MCP OAuth discovery when the server supports it.',
+    mcpTestConnection: 'Test connection',
+    mcpToolCount: '{count} tools',
+    mcpConnected: 'Connected',
+    mcpConnectionError: 'Connection error',
+    mcpDisabledState: 'Disabled',
+    mcpReadyState: 'Ready for runtime',
+    mcpAuthReady: 'Auth ready',
+    mcpAuthMissing: 'Auth missing',
+    mcpSecretKeychain: 'Keychain',
+    mcpSecretEnv: 'Environment',
+    mcpSecretConfig: 'In app',
+    connectorDiagnosticsTitle: 'Connector Diagnostics',
+    connectorDiagnosticsCopy: 'Check auth readiness, connection state, and live tool discovery before the agent uses a connector.',
+    connectorDiagnosticsEmpty: 'Save or test a connector to see live diagnostics.',
+    workspaceOutlineTitle: 'Workspace Outline',
+    workspaceOutlineCopy: 'Browse key folders, jump to files, and push paths into the composer.',
+    workspaceOutlineEmpty: 'No workspace files available yet.',
+    workspaceOutlineInsert: 'Insert path',
+    workspaceOutlineOpen: 'Outline',
+    workspaceRootPlaceholder: '/Users/bg/Desktop/project',
+    workspaceRootSave: 'Use folder',
+    workspaceRootSaving: 'Switching workspace...',
+    workspaceRootSaved: 'Workspace changed',
+    workspaceFileEditorTitle: 'File Editor',
+    workspaceFileEditorCopy: 'Open a text file from the outline to edit it inside this workspace.',
+    workspaceFilePlaceholder: 'Select a workspace file',
+    workspaceFileSave: 'Save file',
+    workspaceFileSaved: 'File saved',
+    workspaceFileDirty: 'Unsaved changes',
+    workspaceFileLoading: 'Opening file...',
+    workspaceFileLoadError: 'Could not open file',
+    commandPaletteTitle: 'Command Palette',
+    commandPaletteHint: 'Jump to chats, tools, settings, and files from one compact panel.',
+    commandPaletteSearchLabel: 'Search',
+    commandPalettePlaceholder: 'Type a command, chat title, or file path',
+    commandPaletteOpen: 'Open command palette',
+    commandPaletteEmpty: 'No matching commands or files.',
+    commandPaletteSectionActions: 'Actions',
+    commandPaletteSectionChats: 'Chats',
+    commandPaletteSectionFiles: 'Files',
+    commandPaletteActionNewChat: 'Start a new chat',
+    commandPaletteActionSettings: 'Open settings',
+    commandPaletteActionActivity: 'Open activity',
+    commandPaletteActionOutline: 'Toggle workspace outline',
+    commandPaletteActionProviders: 'Jump to providers',
+    commandPaletteActionExtensions: 'Jump to integrations',
+    commandPaletteActionAutomation: 'Jump to automation',
+    commandPaletteActionFocusComposer: 'Focus composer',
+    insertedPath: 'Path added to composer',
     collapseChats: 'Collapse chats',
     expandChats: 'Expand chats',
     expandPanel: 'Expand panel',
     shrinkPanel: 'Shrink panel',
+    refresh: 'Refresh',
     skillContentRequired: 'Skill content is required.',
     noteCategory: 'general',
   },
@@ -308,6 +642,123 @@ const I18N = {
     close: 'Kapat',
     panel: 'Panel',
     mobilePanelCopy: 'Küçük ekranlarda sohbetler ve ayarlar bu panelde birleşir.',
+    quickStartTitle: 'Hızlı Başlangıç',
+    quickStartCopy: 'Kur, ilk açılışı onayla, plan seç, modeli bağla ve ilk workflow’unu çalıştır.',
+    guideInstallTitle: 'modAI uygulamasını Applications klasörüne taşı',
+    guideInstallBody: 'Uygulamayı Applications içinde tutmak güncellemeler, izinler ve aktivasyon davranışı için daha güvenli akış sağlar.',
+    guideGatekeeperTitle: 'İlk açılışı onayla',
+    guideGatekeeperBody: 'macOS uygulamayı engellerse Open Anyway kullan veya opsiyonel Gatekeeper yardımcısı olarak Sentinel’i elinde tut.',
+    guidePaymentTitle: 'Ödeme ve aktivasyonu seç',
+    guidePaymentBody: 'Lansman sayfası trial, kart ödemesi, kripto ödemesi ve lisans teslimini tek akışta çözmeli.',
+    guideProviderTitle: 'Bir model provider bağla',
+    guideProviderBody: 'Yerel kullanım için Ollama ile başla, daha güçlü cloud akıl yürütmesi gerektiğinde Gemini veya Anthropic ekle.',
+    guideWorkflowTitle: 'Bir workflow pack çalıştır',
+    guideWorkflowBody: 'Yeni kullanıcıya Founder, Sales veya Research başlangıç paketi ver ki ilk değer dakikalar içinde görünsün.',
+    openLaunchSite: 'Lansman sitesini aç',
+    openProviderSetup: 'Provider ayarlarını aç',
+    openSentinel: 'Sentinel aç',
+    billingCardLabel: 'Kart ile ödeme',
+    billingCardTitle: 'Tekrarlayan planları sade tut',
+    billingCardBody: 'Aylık ve yıllık planlar için merchant-of-record akışı kullan; vergi, fatura ve başarısız ödeme toparlama uygulama binary’sinin dışında kalsın.',
+    billingCryptoLabel: 'Stablecoin ödeme',
+    billingCryptoTitle: 'USDC ve USDT sun',
+    billingCryptoBody: 'Kripto ödeme yıllık plan, founder pass veya kredi paketi için kullanılmalı; ödeme sonrası lisans anında teslim edilmeli.',
+    billingActivationLabel: 'Aktivasyon',
+    billingActivationTitle: 'İlk açılış sürtünmesini düşür',
+    billingActivationBody: 'Trial, satın alma ve aktivasyon üç ayrı kurulum işi gibi değil tek yönlendirilmiş akış gibi hissettirmeli.',
+    billingStatusTitle: 'Trial ve Aktivasyon',
+    billingActivateTitle: 'Trial başlat veya lisans aktive et',
+    billingActivateCopy: 'Yeni kullanıcı uygulamadan çıkmadan trial başlatabilmeli, lisans anahtarını yapıştırabilmeli veya tamamlanan ödemeden devam edebilmelidir.',
+    billingDeviceLabel: 'Cihaz',
+    billingEmailLabel: 'E-posta',
+    billingPlanLabel: 'Plan',
+    billingExpiryLabel: 'Bitiş',
+    billingLicenseKeyLabel: 'Lisans anahtarı',
+    billingStartTrial: '7 günlük trial başlat',
+    billingActivateButton: 'Lisansı aktive et',
+    billingCardRailTitle: 'Kart ile ödeme',
+    billingCardRailCopy: 'Tekrarlayan kart ödemeleri ve tek seferlik planlarda anında lisans teslimi için Lemon Squeezy kullan.',
+    billingCardSetupNeeded: 'Kart satın alımını açmak için Lemon Squeezy checkout URL’lerini ekle.',
+    billingCryptoRailTitle: 'USDC / USDT ödeme',
+    billingCryptoRailCopy: 'Kripto ödeme oluştur, ödeme durumunu izle ve üretilen lisansı bu cihaza uygula.',
+    billingCryptoModeLive: 'Canlı direct-wallet checkout açık. Tam quoted tutarı gönder ve lisansı üretmek için zincir üstü transferi doğrula.',
+    billingCryptoModeSandbox: 'Kripto checkout hâlâ yerel test modunda. Uygulamayı satışa çıkarmadan önce canlı ödeme raylarını bağla.',
+    billingCryptoPlanTitle: 'Kripto planı',
+    billingCryptoCurrencyLabel: 'Stablecoin',
+    billingNetworkLabel: 'Ağ',
+    billingNetworkVerificationReady: '{network} otomatik transfer doğrulaması için hazır.',
+    billingNetworkVerificationNeeded: '{network} için zincir üstü transfer doğrulaması lisans üretebilsin diye önce {setting} tanımlanmalı.',
+    billingPayerWalletLabel: 'Gönderen cüzdan (opsiyonel)',
+    billingPayerWalletPlaceholder: 'Ödemeyi gönderen cüzdan adresi',
+    billingRecipientHint: '{network} ödeme adresi: {address}',
+    billingCreateCryptoPayment: 'Kripto ödeme oluştur',
+    billingLatestPaymentTitle: 'Son ödeme',
+    billingPayAmountLabel: 'Ödenecek tutar',
+    billingPaymentUpdatedLabel: 'Güncellendi',
+    billingQuoteExpiryLabel: 'Teklif bitişi',
+    billingRefreshPayment: 'Durumu yenile',
+    billingSimulatePayment: 'Ödendi simüle et',
+    billingApplyLicense: 'Lisansı uygula',
+    billingLicenseReady: 'Lisans hazır: {key}',
+    billingStatusWaitingPayment: 'transfer bekleniyor',
+    billingStatusPaid: 'ödeme alındı',
+    billingStatusFailed: 'ödeme sorunu',
+    billingStepSendTitle: 'Tam quoted tutarı gönder',
+    billingStepSendBody: 'Cüzdanından tam olarak {amount} gönder. Bu tutar bu invoice için benzersizdir.',
+    billingStepAddressTitle: 'Invoice adresini kullan',
+    billingStepAddressBody: 'Yalnızca {network} ağı üzerinden aşağıdaki adrese gönder.',
+    billingStepVerifyTitle: 'İşlem hash’ini yapıştır',
+    billingStepVerifyBody: 'Transfer zincirde onaylandıktan sonra işlem hash’ini yapıştır ve ödemeyi doğrula.',
+    billingCopyAmount: 'Tutarı kopyala',
+    billingCopyAddress: 'Adresi kopyala',
+    billingCopied: 'Panoya kopyalandı',
+    billingTxHashLabel: 'İşlem hash’i',
+    billingTxHashPlaceholder: 'Zincir üzerindeki işlem hash’ini yapıştır',
+    billingTxHashHint: 'Profesyonel akış: invoice oluştur, tam quoted tutarı gönder, sonra doğrulama için işlem hash’ini yapıştır.',
+    billingTxHashHintWaiting: 'Bu invoice gerçek zincir ödemesini bekliyor. Tam quoted tutarı gönder, sonra aşağıya işlem hash’ini yapıştır.',
+    billingTxHashRequired: 'İşlem hash’i gerekli.',
+    billingVerifyTransfer: 'Transferi doğrula',
+    billingVerifyingTransfer: 'Transfer doğrulanıyor...',
+    billingTransferVerified: 'Transfer doğrulandı',
+    billingOpenExplorer: 'Explorer aç',
+    billingStatusActive: 'Aktif lisans',
+    billingStatusTrial: 'Trial açık',
+    billingStatusExpired: 'Erişim bitti',
+    billingStatusInactive: 'Henüz lisans yok',
+    billingPillActive: 'aktif',
+    billingPillTrial: 'trial',
+    billingPillExpired: 'süresi doldu',
+    billingPillInactive: 'pasif',
+    billingActiveCopy: 'Bu cihaz {source} üzerinden aktive edildi. Geçerli plan: {plan}.',
+    billingTrialCopy: 'Ücretsiz trial aktif. Aktivasyon gerekmeden önce {days} gün kaldı.',
+    billingExpiredCopy: 'Trial veya ücretli erişimin süresi doldu. Devam etmek için lisans aktive et veya ödeme tamamla.',
+    billingInactiveCopy: 'Bu cihaza henüz aktif trial veya lisans bağlanmadı.',
+    billingUnset: 'Tanımlı değil',
+    billingTrialStarted: 'Trial başlatıldı',
+    billingActivating: 'Lisans aktive ediliyor...',
+    billingActivated: 'Lisans aktive edildi',
+    billingStartingCrypto: 'Kripto ödeme oluşturuluyor...',
+    billingCryptoReady: 'Kripto ödeme hazır',
+    billingRefreshingPayment: 'Ödeme durumu yenileniyor...',
+    billingPaymentUpdated: 'Ödeme durumu yenilendi',
+    billingClaimingLicense: 'Lisans uygulanıyor...',
+    billingClaimed: 'Lisans uygulandı',
+    billingOpeningCheckout: 'Checkout açılıyor...',
+    sentinelNoteTitle: 'Gatekeeper destek notu',
+    sentinelNoteBody: 'Gatekeeper durumunu daha net görmek isteyen ileri seviye kullanıcılara Sentinel’i destek akışında opsiyonel yardımcı araç olarak öner; zorunlu hale getirme.',
+    workflowPacksTitle: 'Workflow Packler',
+    workflowPacksCopy: 'Yeni kullanıcı prompt özelleştirmeye geçmeden önce değer görsün diye çıkışta üç persona pack ile başla.',
+    packFounderLabel: 'Founder OS',
+    packFounderTitle: 'Günlük operatör paketi',
+    packFounderBody: 'Inbox triage, lansman checklist’i, follow-up taslağı, toplantı hazırlığı ve günlük yürütme özetleri.',
+    packSalesLabel: 'Sales Operator',
+    packSalesTitle: 'Takip odaklı paket',
+    packSalesBody: 'Lead hatırlatmaları, objection handling, CRM not temizliği ve proposal follow-up akışları.',
+    packResearchLabel: 'Research Desk',
+    packResearchTitle: 'Karar destek paketi',
+    packResearchBody: 'Kaynak toplama, karşılaştırma notları, sentez ve memory destekli aksiyon listesi üretimi.',
+    openAutomationGuide: 'Automation sekmesini aç',
+    openPricingPage: 'Fiyatlandırmayı aç',
     providersLabel: 'Providerlar',
     providersCopy: 'Yerel modelleri, cloud providerları ve API anahtarlarını yönet.',
     runtimeLabel: 'Çalışma Modu',
@@ -363,9 +814,11 @@ const I18N = {
     noTasks: 'Planlanmış görev yok.',
     newSessionBadge: 'Yeni session',
     sessionActive: 'Session aktif',
+    headerSessionLabel: 'Oturum',
+    headerModelLabel: 'Model',
     noMessagesYet: 'Henüz mesaj yok',
     messagesLabel: 'mesaj',
-    workspaceLabel: 'Workspace',
+    workspaceLabel: 'Çalışma alanı',
     modelNotSelected: 'Model seçilmedi',
     runtimeWaiting: 'Çalışma ortamı beklemede',
     noActiveModel: 'Aktif model yok',
@@ -416,11 +869,30 @@ const I18N = {
     settingsSaving: 'Ayarlar kaydediliyor...',
     settingsSaved: 'Ayarlar kaydedildi',
     deleteChatConfirm: 'Bu sohbet kaydı silinsin mi?',
+    deleteChatConfirmTitle: 'Sohbet kaydını sil',
+    deleteChatConfirmBody: 'Eski sohbet "{title}" silinsin mi? Bu işlem geri alınamaz.',
     deleteTaskConfirm: 'Bu planlanmış görev silinsin mi?',
+    deleteTaskConfirmTitle: 'Planlanmış görevi sil',
+    deleteTaskConfirmBody: '"{title}" görevi silinsin mi? Bu işlem geri alınamaz.',
     deletingChat: 'Sohbet siliniyor...',
     deletedChat: 'Sohbet silindi',
     deletingTask: 'Görev siliniyor...',
     deletedTask: 'Görev silindi',
+    editTask: 'Düzenle',
+    editingTask: 'Görev kaydediliyor...',
+    taskUpdated: 'Görev güncellendi',
+    confirmAction: 'İşlemi Onayla',
+    confirm: 'Onayla',
+    cancel: 'Vazgeç',
+    editTaskDetails: 'Görev detaylarını düzenle',
+    editTaskCopy: 'Aşağıdaki alanlardan planlanmış görevi güncelle.',
+    taskTitleLabel: 'Görev başlığı',
+    taskGoalLabel: 'Amaç',
+    taskConstraintsLabel: 'Kısıtlar',
+    taskDueLabel: 'Teslim',
+    taskCompletionLabel: 'Tamamlanma kriteri',
+    saveTaskChanges: 'Görevi Kaydet',
+    taskTitleRequired: 'Görev başlığı gerekli.',
     loadingChat: 'Sohbet yükleniyor...',
     loadedChat: 'Sohbet yüklendi · {model}',
     error: 'Hata',
@@ -465,11 +937,122 @@ const I18N = {
     skillFileLoaded: 'Skill dosyası yüklendi',
     generalTab: 'Genel',
     automationTab: 'Otomasyon',
-    extensionsTab: 'Eklentiler',
+    extensionsTab: 'Entegrasyonlar',
+    collapseSidebar: 'Sol kenar cubugunu daralt',
+    expandSidebar: 'Sol kenar cubugunu genislet',
+    minimizeTopBar: 'Ust barı kucult',
+    restoreTopBar: 'Ust barı geri getir',
+    integrationsTitle: 'Entegrasyonlar',
+    integrationsCopy: 'MCP, plugin, desktop control ve skill tabanli workflowlari tek bir operator yuzeyinde derli toplu tut.',
+    integrationsDesktopLabel: 'Desktop control',
+    integrationsDesktopBody: 'Browser aksiyonlari, screenshot, dosyalar ve computer-use akislari ayni operator yuzeyinde kalsin.',
+    integrationsPluginsLabel: 'Pluginler',
+    integrationsPluginsBody: 'Aktif pluginler gizli ayar yerine tek tiklik entegrasyona donusmeli.',
+    integrationsSkillsLabel: 'Skilller',
+    integrationsSkillsBody: 'GitHub review, research ve follow-up gibi tekrarli isleri yeniden kullanilabilir skill olarak paketle.',
+    integrationsMcpLabel: 'MCP sunuculari',
+    integrationsMcpBody: 'Remote ve local connectorlar burada gercekten konfigure edilebilmeli, sadece oneride kalmamali.',
+    integrationsActiveCount: '{count} aktif',
+    integrationsReadyCount: '{count} hazir',
+    mcpServersTitle: 'MCP Sunuculari',
+    mcpServersCopy: 'Remote veya local MCP connectorlarini ekle, sadece guvendiklerini acik tut ve ayarlari ayni akista yonet.',
+    mcpAddCustom: 'Ozel MCP ekle',
+    mcpPresetLabel: 'Hazir presetler',
+    mcpEmpty: 'Henuz MCP sunucusu yok. Bir preset ekle veya ozel connector olustur.',
+    mcpPresetGithub: 'GitHub',
+    mcpPresetNotion: 'Notion',
+    mcpPresetFigma: 'Figma',
+    mcpPresetBrowser: 'Browser',
+    mcpPresetGithubBody: 'Opsiyonel PAT header destegiyle remote GitHub MCP.',
+    mcpPresetNotionBody: 'OAuth ile calisan hosted Notion MCP.',
+    mcpPresetFigmaBody: 'Design context ve Dev Mode akislari icin hosted Figma MCP.',
+    mcpPresetBrowserBody: 'Local otomasyon icin custom browser veya Playwright bridge.',
+    mcpEnabled: 'Acik',
+    mcpDisabled: 'Kapali',
+    mcpReady: 'Hazir',
+    mcpNeedsSetup: 'Kurulum gerekli',
+    mcpNameLabel: 'Connector adi',
+    mcpTransportLabel: 'Transport',
+    mcpUrlLabel: 'Remote URL',
+    mcpCommandLabel: 'Komut',
+    mcpArgsLabel: 'Argumanlar',
+    mcpHeadersLabel: 'Headers JSON',
+    mcpRemove: 'Kaldir',
+    mcpOpenDocs: 'Dokuman',
+    mcpTransportHttp: 'Remote HTTP',
+    mcpTransportSse: 'Legacy SSE',
+    mcpTransportStdio: 'Local stdio',
+    mcpAuthLabel: 'Yetki',
+    mcpAuthNone: 'Yetki yok',
+    mcpAuthBearer: 'Bearer token',
+    mcpAuthOauth: 'OAuth / PKCE',
+    mcpAuthTokenEnvLabel: 'Token ortam degiskeni',
+    mcpAuthTokenLabel: 'Token',
+    mcpAuthTokenPlaceholder: 'Guvenli saklamak icin bearer token yapistir',
+    mcpClearToken: 'Token temizle',
+    mcpOauthAuthorizationUrlLabel: 'Authorization URL',
+    mcpOauthTokenUrlLabel: 'Token URL',
+    mcpOauthClientIdLabel: 'Client ID',
+    mcpOauthClientSecretEnvLabel: 'Client secret env',
+    mcpOauthScopesLabel: 'Scope listesi',
+    mcpOauthAuthorize: 'OAuth yetkilendir',
+    mcpOauthStarting: 'OAuth aciliyor...',
+    mcpOauthStarted: 'OAuth tarayicida acildi',
+    mcpOauthHint: 'Server destekliyorsa MCP OAuth discovery kullanmak icin endpointleri bos birak.',
+    mcpTestConnection: 'Baglantiyi test et',
+    mcpToolCount: '{count} arac',
+    mcpConnected: 'Bagli',
+    mcpConnectionError: 'Baglanti hatasi',
+    mcpDisabledState: 'Kapali',
+    mcpReadyState: 'Runtime icin hazir',
+    mcpAuthReady: 'Yetki hazir',
+    mcpAuthMissing: 'Yetki eksik',
+    mcpSecretKeychain: 'Keychain',
+    mcpSecretEnv: 'Ortam',
+    mcpSecretConfig: 'Uygulama ici',
+    connectorDiagnosticsTitle: 'Connector Diagnostigi',
+    connectorDiagnosticsCopy: 'Ajan connector kullanmadan once yetki durumunu, baglantiyi ve canli tool kesfini kontrol et.',
+    connectorDiagnosticsEmpty: 'Canli diagnostik gormek icin connectoru kaydet veya test et.',
+    workspaceOutlineTitle: 'Calisma Alani Ozeti',
+    workspaceOutlineCopy: 'Ana klasorleri gez, dosyalara atla ve pathleri composer icine ekle.',
+    workspaceOutlineEmpty: 'Henuz gosterilecek workspace dosyasi yok.',
+    workspaceOutlineInsert: 'Path ekle',
+    workspaceOutlineOpen: 'Outline',
+    workspaceRootPlaceholder: '/Users/bg/Desktop/proje',
+    workspaceRootSave: 'Klasoru kullan',
+    workspaceRootSaving: 'Workspace degistiriliyor...',
+    workspaceRootSaved: 'Workspace degisti',
+    workspaceFileEditorTitle: 'Dosya Editoru',
+    workspaceFileEditorCopy: 'Workspace icinde duzenlemek icin outlinedan bir text dosyasi ac.',
+    workspaceFilePlaceholder: 'Bir workspace dosyasi sec',
+    workspaceFileSave: 'Dosyayi kaydet',
+    workspaceFileSaved: 'Dosya kaydedildi',
+    workspaceFileDirty: 'Kaydedilmemis degisiklik var',
+    workspaceFileLoading: 'Dosya aciliyor...',
+    workspaceFileLoadError: 'Dosya acilamadi',
+    commandPaletteTitle: 'Komut Paleti',
+    commandPaletteHint: 'Tek bir kompakt panelden sohbetlere, araclara, ayarlara ve dosyalara gec.',
+    commandPaletteSearchLabel: 'Ara',
+    commandPalettePlaceholder: 'Komut, sohbet basligi veya dosya yolu yaz',
+    commandPaletteOpen: 'Komut paletini ac',
+    commandPaletteEmpty: 'Eslesen komut veya dosya yok.',
+    commandPaletteSectionActions: 'Aksiyonlar',
+    commandPaletteSectionChats: 'Sohbetler',
+    commandPaletteSectionFiles: 'Dosyalar',
+    commandPaletteActionNewChat: 'Yeni sohbet baslat',
+    commandPaletteActionSettings: 'Ayarlari ac',
+    commandPaletteActionActivity: 'Aktiviteyi ac',
+    commandPaletteActionOutline: 'Workspace outline ac/kapat',
+    commandPaletteActionProviders: 'Providerlara git',
+    commandPaletteActionExtensions: 'Integrations sekmesine git',
+    commandPaletteActionAutomation: 'Automation sekmesine git',
+    commandPaletteActionFocusComposer: 'Composer odagini ac',
+    insertedPath: 'Path composer icine eklendi',
     collapseChats: 'Sohbetleri daralt',
     expandChats: 'Sohbetleri genişlet',
     expandPanel: 'Paneli genişlet',
     shrinkPanel: 'Paneli daralt',
+    refresh: 'Yenile',
     skillContentRequired: 'Skill içeriği gerekli.',
     noteCategory: 'genel',
   },
@@ -481,6 +1064,7 @@ async function boot() {
   await loadLocaleDictionaries()
   bindEvents()
   await refreshSettings()
+  maybeShowFirstRunGuide()
   renderConversation()
   renderActivity()
   renderComposerContext()
@@ -515,12 +1099,38 @@ function bindEvents() {
   drawerSessionsPanel.addEventListener('click', onSessionCardClick)
   scheduledTasksPanel.addEventListener('click', onScheduledTasksClick)
   drawerTabList.addEventListener('click', onDrawerTabClick)
+  settingsDrawer.addEventListener('click', onSettingsDrawerActionClick)
+  settingsDrawer.addEventListener('input', onSettingsDrawerInput)
+  settingsDrawer.addEventListener('submit', onSettingsDrawerSubmit)
   providersPanel.addEventListener('click', onProviderPanelClick)
   providersPanel.addEventListener('input', onProviderPanelInput)
   providerTabList.addEventListener('click', onProviderTabClick)
+  commandPaletteButton?.addEventListener('click', () => openCommandPalette())
+  commandPaletteOverlay?.addEventListener('click', event => {
+    if (event.target === commandPaletteOverlay) {
+      closeCommandPalette()
+    }
+  })
+  commandPaletteInput?.addEventListener('input', event => {
+    state.commandPaletteQuery = event.target.value
+    renderCommandPalette()
+  })
+  commandPaletteInput?.addEventListener('keydown', onCommandPaletteKeydown)
+  commandPaletteResults?.addEventListener('click', onCommandPaletteClick)
+  sidebarToggleButton?.addEventListener('click', toggleSidebar)
+  toggleHeaderButton?.addEventListener('click', toggleHeaderBar)
+  toggleOutlineButton?.addEventListener('click', toggleWorkspaceOutline)
   toggleSettingsButton.addEventListener('click', openSettingsDrawer)
   closeSettingsButton.addEventListener('click', closeSettingsDrawer)
   settingsSizeButton?.addEventListener('click', toggleDrawerSize)
+  saveWorkspaceRootButton?.addEventListener('click', saveWorkspaceRoot)
+  refreshOutlineButton?.addEventListener('click', refreshWorkspaceOutline)
+  closeOutlineButton?.addEventListener('click', closeWorkspaceOutline)
+  workspaceOutlineTree?.addEventListener('click', onWorkspaceOutlineClick)
+  workspaceFileInput?.addEventListener('input', onWorkspaceFileInput)
+  saveWorkspaceFileButton?.addEventListener('click', saveWorkspaceFile)
+  insertWorkspacePathButton?.addEventListener('click', () => insertPathIntoComposer(state.workspaceFile.path))
+  closeWorkspaceFileButton?.addEventListener('click', closeWorkspaceFile)
   drawerNewChatButton.addEventListener('click', onClear)
   drawerScrim.addEventListener('click', closeSettingsDrawer)
   toggleActivityButton.addEventListener('click', openActivityDrawer)
@@ -543,6 +1153,28 @@ function bindEvents() {
       composer.requestSubmit()
     }
   })
+  confirmCancelButton?.addEventListener('click', () => resolveConfirmDialog(false))
+  confirmApproveButton?.addEventListener('click', () => resolveConfirmDialog(true))
+  confirmOverlay?.addEventListener('click', event => {
+    if (event.target === confirmOverlay) {
+      resolveConfirmDialog(false)
+    }
+  })
+  taskEditorCancelButton?.addEventListener('click', () => closeTaskEditor())
+  taskEditorOverlay?.addEventListener('click', event => {
+    if (event.target === taskEditorOverlay) {
+      closeTaskEditor()
+    }
+  })
+  taskEditorForm?.addEventListener('submit', onTaskEditorSubmit)
+  window.addEventListener('keydown', onGlobalKeydown)
+  window.addEventListener('focus', () => {
+    if (!state.pendingMcpOAuthRefresh) {
+      return
+    }
+    state.pendingMcpOAuthRefresh = false
+    void refreshSettings()
+  })
 }
 
 function uiLanguage() {
@@ -561,6 +1193,43 @@ function t(key, variables = {}) {
     (output, [name, value]) => output.replaceAll(`{${name}}`, String(value)),
     template,
   )
+}
+
+function setStatusIndicator(label, tone = 'ready') {
+  if (!statusBox) {
+    return
+  }
+
+  statusBox.dataset.tone = tone
+  const copy = statusBox.querySelector('.status-copy')
+  if (copy) {
+    copy.textContent = label
+    return
+  }
+  statusBox.textContent = label
+}
+
+function setHeaderSummary(node, label, value, tone = 'neutral', title = '') {
+  if (!node) {
+    return
+  }
+
+  node.dataset.tone = tone
+  if (title) {
+    node.title = title
+  } else {
+    node.removeAttribute('title')
+  }
+
+  const labelNode = node.querySelector('.header-context-label')
+  const valueNode = node.querySelector('.header-context-value')
+  if (labelNode && valueNode) {
+    labelNode.textContent = label
+    valueNode.textContent = value
+    return
+  }
+
+  node.textContent = value
 }
 
 async function loadLocaleDictionaries() {
@@ -646,15 +1315,23 @@ function applyTranslations() {
   updateModelStatus()
   renderProviders(state.settings ?? {})
   renderPermissions(state.settings ?? {})
+  renderIntegrations(state.settings ?? {})
+  renderMcpDiagnostics(state.settings ?? {})
+  renderMcpServers(state.settings ?? {})
   renderSkills(state.settings ?? {})
   renderPlugins(state.settings ?? {})
   renderTools(state.settings ?? {})
   renderMemory(state.settings ?? {})
   renderReminderSettings(state.settings ?? {})
+  renderWorkspaceOutline()
+  renderCommandPalette()
   renderComposerContext()
   renderActivity()
   renderConversation()
   syncChatsSectionUi()
+  syncShellLayout()
+  syncHeaderLayout()
+  syncOutlineLayout()
   syncDrawerLayout()
 }
 
@@ -675,7 +1352,7 @@ function buildModeExamples(language = uiLanguage()) {
           hint: 'Chrome açıp YouTube arama sonucunu gösterir.',
           prompt: [
             'Gorev: Google Chrome ac ve YouTube ziyaret et',
-            'Amac: Baran Gulesen videolarini bulmak',
+            'Amac: Baran Gulesen ara',
             'Kisitlar: Yalnizca Google Chrome kullan, yeni bir sekmede ac',
             'Tamamlanma Kriteri: YouTube sonuc sayfasi gorunuyor',
           ].join('\n'),
@@ -704,8 +1381,8 @@ function buildModeExamples(language = uiLanguage()) {
           title: 'Chrome ile URL aç',
           hint: 'Google Chrome içinde belirli bir siteyi açar.',
           prompt: [
-            'Gorev: Google Chrome ac ve https://openai.com sayfasini ziyaret et',
-            'Amac: resmi siteyi kontrol etmek',
+            'Gorev: Google Chrome ac ve https://fusungulesen.com sayfasini ziyaret et',
+            'Amac: siteyi kontrol etmek',
             'Kisitlar: yalnizca Google Chrome kullan',
             'Tamamlanma Kriteri: sayfa Chrome icinde acildi',
           ].join('\n'),
@@ -783,7 +1460,7 @@ function buildModeExamples(language = uiLanguage()) {
         hint: 'Opens Chrome and shows a YouTube search result.',
         prompt: [
           'Task: Open Google Chrome and visit YouTube',
-          'Goal: find Baran Gulesen videos',
+          'Goal: find Baran Gulesen',
           'Constraints: only use Google Chrome, open it in a new tab',
           'Completion Criteria: YouTube search results are visible',
         ].join('\n'),
@@ -812,8 +1489,8 @@ function buildModeExamples(language = uiLanguage()) {
         title: 'Open URL in Chrome',
         hint: 'Launches a specific URL in Google Chrome.',
         prompt: [
-          'Task: Open Google Chrome and visit https://openai.com',
-          'Goal: review the official website',
+          'Task: Open Google Chrome and visit https://fusungulesen.com',
+          'Goal: review the website',
           'Constraints: only use Google Chrome',
           'Completion Criteria: the page is open in Chrome',
         ].join('\n'),
@@ -888,6 +1565,7 @@ async function refreshSettings() {
   const settings = await fetchJson('/api/settings')
   state.settings = settings
   renderSettings(settings)
+  await refreshWorkspaceOutline()
 }
 
 function renderSettings(settings) {
@@ -908,7 +1586,11 @@ function renderSettings(settings) {
   renderAgent(settings)
   renderComposerTemplateSettings(settings)
   renderReminderSettings(settings)
+  renderBilling(settings)
   renderPermissions(settings)
+  renderIntegrations(settings)
+  renderMcpDiagnostics(settings)
+  renderMcpServers(settings)
   renderSkills(settings)
   renderPlugins(settings)
   renderTools(settings)
@@ -918,6 +1600,9 @@ function renderSettings(settings) {
   updateSessionIndicators()
   renderComposerContext()
   resizeComposerInput()
+  syncShellLayout()
+  syncHeaderLayout()
+  syncOutlineLayout()
 }
 
 function renderReminderSettings(settings) {
@@ -929,6 +1614,45 @@ function renderReminderSettings(settings) {
       ? `${t('reminderDaemonOn')} ${reminders.daemon.message ?? ''}`.trim()
       : t('reminderDaemonOn')
     : t('reminderDaemonOff')
+}
+
+function renderBilling(settings) {
+  if (!billingPanel) {
+    return
+  }
+
+  syncBillingDraft(settings.billing)
+  billingPanel.innerHTML = renderBillingPanelMarkup(settings.billing, {
+    draft: state.billingDraft,
+    t,
+    formatTimestamp: value => formatTimestamp(value, localeForUi()),
+  })
+
+  void maybeAutoClaimLatestPayment(settings.billing)
+}
+
+function syncBillingDraft(billing) {
+  if (!billing) {
+    return
+  }
+
+  const networks = billing.networks ?? []
+  const currentNetwork = networks.find(network => network.id === state.billingDraft.networkId) ?? networks[0] ?? null
+  const currentAsset = currentNetwork?.assets?.find(asset => asset.id === state.billingDraft.assetId) ?? currentNetwork?.assets?.[0] ?? null
+
+  if (!state.billingDraft.deviceName) {
+    state.billingDraft.deviceName = billing.device?.name ?? ''
+  }
+  if (!state.billingDraft.email) {
+    state.billingDraft.email = billing.activation?.email || billing.payments?.[0]?.email || ''
+  }
+  if (!state.billingDraft.cryptoPlanId) {
+    state.billingDraft.cryptoPlanId = billing.plans?.crypto?.[0]?.id ?? 'pro-annual'
+  }
+  state.billingDraft.cardPlanId ||= billing.plans?.card?.[0]?.id ?? 'starter-monthly'
+  state.billingDraft.networkId = currentNetwork?.id ?? state.billingDraft.networkId
+  state.billingDraft.assetId = currentAsset?.id ?? state.billingDraft.assetId
+  state.billingDraft.cryptoCurrency = currentAsset?.id ?? (state.billingDraft.cryptoCurrency || 'usdc')
 }
 
 function renderModels(settings) {
@@ -1025,6 +1749,460 @@ function renderPermissions(settings) {
   }
 }
 
+function renderIntegrations(settings) {
+  if (!integrationsPanel) {
+    return
+  }
+
+  const plugins = settings.plugins ?? []
+  const skills = settings.skills ?? []
+  const tools = settings.tools ?? []
+  const mcpServers = cloneMcpServers(settings)
+  const desktopTools = tools.filter(tool => tool.requiredMode === 'desktop').length
+  const activePlugins = plugins.filter(plugin => plugin.active).length
+  const activeSkills = skills.filter(skill => skill.active).length
+  const activeMcp = mcpServers.filter(server => server.enabled).length
+  const mcpHeadline = activeMcp
+    ? t('integrationsActiveCount', { count: activeMcp })
+    : ['github', 'notion', 'figma'].map(getMcpPresetLabel).join(' · ')
+  const mcpBody = activeMcp
+    ? mcpServers.filter(server => server.enabled).slice(0, 3).map(server => server.name).join(' · ')
+    : t('integrationsMcpBody')
+
+  const cards = [
+    {
+      label: t('integrationsDesktopLabel'),
+      value: t('integrationsReadyCount', { count: desktopTools }),
+      body: t('integrationsDesktopBody'),
+    },
+    {
+      label: t('integrationsPluginsLabel'),
+      value: t('integrationsActiveCount', { count: activePlugins }),
+      body: t('integrationsPluginsBody'),
+    },
+    {
+      label: t('integrationsSkillsLabel'),
+      value: t('integrationsActiveCount', { count: activeSkills }),
+      body: t('integrationsSkillsBody'),
+    },
+    {
+      label: t('integrationsMcpLabel'),
+      value: mcpHeadline,
+      body: mcpBody,
+    },
+  ]
+
+  integrationsPanel.innerHTML = cards.map(card => `
+    <article class="launch-card integration-card">
+      <span class="launch-kicker">${escapeHtml(card.label)}</span>
+      <strong>${escapeHtml(card.value)}</strong>
+      <p>${escapeHtml(card.body)}</p>
+    </article>
+  `).join('')
+}
+
+function renderMcpDiagnostics(settings) {
+  if (!mcpDiagnosticsPanel) {
+    return
+  }
+
+  const servers = cloneMcpServers(settings)
+  const diagnostics = settings?.mcp?.diagnostics ?? []
+
+  if (!servers.length) {
+    mcpDiagnosticsPanel.innerHTML = `<div class="empty-card">${escapeHtml(t('connectorDiagnosticsEmpty'))}</div>`
+    return
+  }
+
+  mcpDiagnosticsPanel.innerHTML = servers.map(server => {
+    const diagnostic = diagnostics.find(item => item.serverId === server.id) ?? null
+    const authReady = server.authType === 'none' || server.hasAuthToken || server.authTokenSource || server.authTokenEnv
+    const authState = authReady ? t('mcpAuthReady') : t('mcpAuthMissing')
+    const authTone = authReady ? 'ready' : 'warn'
+    const storage = formatMcpSecretSource(server.authTokenSource || (server.authTokenEnv ? 'env' : ''))
+    const connectionState = diagnostic
+      ? diagnostic.ok
+        ? t('mcpConnected')
+        : diagnostic.status === 'disabled'
+          ? t('mcpDisabledState')
+          : t('mcpConnectionError')
+      : t('mcpNeedsSetup')
+    const toolState = diagnostic?.toolCount
+      ? t('mcpToolCount', { count: diagnostic.toolCount })
+      : t('mcpReadyState')
+
+    return `
+      <article class="mcp-diagnostic-card" data-mcp-index="${escapeHtml(server.id)}">
+        <div class="mcp-card-head">
+          <div class="mcp-card-copy">
+            <strong>${escapeHtml(server.name)}</strong>
+            <div class="mcp-chip-row">
+              <span class="mcp-status-chip ${diagnostic?.ok ? 'ready' : diagnostic?.status === 'disabled' ? 'muted' : 'warn'}">${escapeHtml(connectionState)}</span>
+              <span class="mcp-status-chip ${authTone}">${escapeHtml(authState)}</span>
+              <span class="message-chip">${escapeHtml(toolState)}</span>
+            </div>
+          </div>
+          <div class="mcp-card-actions">
+            <button type="button" class="secondary" data-mcp-action="test-server" data-mcp-id="${escapeHtml(server.id)}">${escapeHtml(t('mcpTestConnection'))}</button>
+          </div>
+        </div>
+        <div class="provider-inline-note">
+          ${escapeHtml(storage ? `${storage} · ${diagnostic?.endpoint || server.url || server.command || ''}` : diagnostic?.endpoint || server.url || server.command || '')}
+        </div>
+        ${diagnostic?.error ? `<div class="provider-inline-note error-note">${escapeHtml(diagnostic.error)}</div>` : ''}
+      </article>
+    `
+  }).join('')
+}
+
+function renderMcpServers(settings) {
+  if (!mcpPanel) {
+    return
+  }
+
+  const servers = cloneMcpServers(settings)
+  const presetButtons = [
+    ['github', t('mcpPresetGithub')],
+    ['notion', t('mcpPresetNotion')],
+    ['figma', t('mcpPresetFigma')],
+    ['browser', t('mcpPresetBrowser')],
+  ]
+
+  mcpPanel.innerHTML = `
+    <div class="mcp-toolbar">
+      <div class="mcp-toolbar-copy">${escapeHtml(t('mcpPresetLabel'))}</div>
+      <div class="mcp-toolbar-actions">
+        ${presetButtons.map(([presetId, label]) => `
+          <button type="button" class="secondary mcp-preset-button" data-mcp-action="add-preset" data-mcp-preset="${escapeHtml(presetId)}">${escapeHtml(label)}</button>
+        `).join('')}
+      </div>
+    </div>
+    ${servers.length
+      ? `<div class="mcp-stack">${servers.map((server, index) => renderMcpServerCardMarkup(settings, server, index)).join('')}</div>`
+      : `<div class="empty-card">${escapeHtml(t('mcpEmpty'))}</div>`}
+  `
+}
+
+function renderMcpServerCardMarkup(settings, server, index) {
+  const preset = server.presetId ? MCP_PRESETS[server.presetId] ?? null : null
+  const diagnostic = (settings?.mcp?.diagnostics ?? []).find(item => item.serverId === server.id) ?? null
+  const isRemote = server.transport === 'http' || server.transport === 'sse'
+  const isConfigured = isRemote
+    ? Boolean(server.url.trim())
+    : Boolean(server.command.trim())
+  const transportLabel = server.transport === 'http'
+    ? t('mcpTransportHttp')
+    : server.transport === 'sse'
+      ? t('mcpTransportSse')
+      : t('mcpTransportStdio')
+  const statusLabel = isConfigured ? t('mcpReady') : t('mcpNeedsSetup')
+  const enabledLabel = server.enabled ? t('mcpEnabled') : t('mcpDisabled')
+
+  return `
+    <article class="mcp-card" data-mcp-index="${index}">
+      <div class="mcp-card-head">
+        <div class="mcp-card-copy">
+          <strong>${escapeHtml(server.name)}</strong>
+          <div class="mcp-chip-row">
+            <span class="message-chip">${escapeHtml(transportLabel)}</span>
+            ${preset ? `<span class="message-chip">${escapeHtml(getMcpPresetLabel(server.presetId))}</span>` : ''}
+            <span class="mcp-status-chip ${isConfigured ? 'ready' : 'warn'}">${escapeHtml(statusLabel)}</span>
+            ${diagnostic ? `<span class="message-chip">${escapeHtml(diagnostic.ok ? t('mcpToolCount', { count: diagnostic.toolCount ?? 0 }) : t('mcpConnectionError'))}</span>` : ''}
+          </div>
+        </div>
+        <div class="mcp-card-actions">
+          <label class="mcp-enable-toggle">
+            <input type="checkbox" data-mcp-field="enabled" ${server.enabled ? 'checked' : ''} />
+            <span>${escapeHtml(enabledLabel)}</span>
+          </label>
+          <button type="button" class="secondary" data-mcp-action="test-server" data-mcp-id="${escapeHtml(server.id)}">${escapeHtml(t('mcpTestConnection'))}</button>
+          ${preset?.docsUrl ? `<button type="button" class="secondary" data-open-url="${escapeHtml(preset.docsUrl)}">${escapeHtml(t('mcpOpenDocs'))}</button>` : ''}
+          <button type="button" class="secondary" data-mcp-action="remove-server" data-mcp-index="${index}">${escapeHtml(t('mcpRemove'))}</button>
+        </div>
+      </div>
+      <div class="field-grid mcp-field-grid">
+        <label class="field compact-field">
+          <span>${escapeHtml(t('mcpNameLabel'))}</span>
+          <input type="text" data-mcp-field="name" value="${escapeHtml(server.name)}" />
+        </label>
+        <label class="field compact-field">
+          <span>${escapeHtml(t('mcpTransportLabel'))}</span>
+          <select data-mcp-field="transport">
+            <option value="http" ${server.transport === 'http' ? 'selected' : ''}>${escapeHtml(t('mcpTransportHttp'))}</option>
+            <option value="sse" ${server.transport === 'sse' ? 'selected' : ''}>${escapeHtml(t('mcpTransportSse'))}</option>
+            <option value="stdio" ${server.transport === 'stdio' ? 'selected' : ''}>${escapeHtml(t('mcpTransportStdio'))}</option>
+          </select>
+        </label>
+        ${isRemote ? `
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpUrlLabel'))}</span>
+            <input type="text" data-mcp-field="url" value="${escapeHtml(server.url)}" placeholder="https://example.com/mcp" />
+          </label>
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpHeadersLabel'))}</span>
+            <textarea data-mcp-field="headersText" rows="3" placeholder='{"Authorization":"Bearer ..."}'>${escapeHtml(server.headersText)}</textarea>
+          </label>
+        ` : `
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpCommandLabel'))}</span>
+            <input type="text" data-mcp-field="command" value="${escapeHtml(server.command)}" placeholder="npx" />
+          </label>
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpArgsLabel'))}</span>
+            <input type="text" data-mcp-field="argsText" value="${escapeHtml(server.argsText)}" placeholder="-y mcp-remote https://example.com/mcp" />
+          </label>
+        `}
+        <label class="field compact-field">
+          <span>${escapeHtml(t('mcpAuthLabel'))}</span>
+          <select data-mcp-field="authType">
+            <option value="none" ${server.authType === 'none' ? 'selected' : ''}>${escapeHtml(t('mcpAuthNone'))}</option>
+            <option value="bearer" ${server.authType === 'bearer' ? 'selected' : ''}>${escapeHtml(t('mcpAuthBearer'))}</option>
+            <option value="oauth" ${server.authType === 'oauth' ? 'selected' : ''}>${escapeHtml(t('mcpAuthOauth'))}</option>
+          </select>
+        </label>
+        <label class="field compact-field">
+          <span>${escapeHtml(t('mcpAuthTokenEnvLabel'))}</span>
+          <input type="text" data-mcp-field="authTokenEnv" value="${escapeHtml(server.authTokenEnv)}" placeholder="GITHUB_TOKEN" />
+        </label>
+        ${server.authType === 'bearer' ? `
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpAuthTokenLabel'))}</span>
+            <input type="password" data-mcp-field="authToken" value="${escapeHtml(server.authToken)}" placeholder="${escapeHtml(t('mcpAuthTokenPlaceholder'))}" />
+          </label>
+        ` : ''}
+        ${server.authType === 'oauth' && isRemote ? `
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpOauthAuthorizationUrlLabel'))}</span>
+            <input type="text" data-mcp-field="oauthAuthorizationUrl" value="${escapeHtml(server.oauthAuthorizationUrl)}" placeholder="https://provider.com/oauth/authorize" />
+          </label>
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpOauthTokenUrlLabel'))}</span>
+            <input type="text" data-mcp-field="oauthTokenUrl" value="${escapeHtml(server.oauthTokenUrl)}" placeholder="https://provider.com/oauth/token" />
+          </label>
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpOauthClientIdLabel'))}</span>
+            <input type="text" data-mcp-field="oauthClientId" value="${escapeHtml(server.oauthClientId)}" placeholder="client_id or leave empty for dynamic registration" />
+          </label>
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpOauthClientSecretEnvLabel'))}</span>
+            <input type="text" data-mcp-field="oauthClientSecretEnv" value="${escapeHtml(server.oauthClientSecretEnv)}" placeholder="MCP_OAUTH_CLIENT_SECRET" />
+          </label>
+          <label class="field compact-field">
+            <span>${escapeHtml(t('mcpOauthScopesLabel'))}</span>
+            <input type="text" data-mcp-field="oauthScopes" value="${escapeHtml(server.oauthScopes)}" placeholder="read write" />
+          </label>
+        ` : ''}
+      </div>
+      <div class="mcp-footer-row">
+        ${server.authType === 'oauth' && isRemote
+          ? `<div class="provider-inline-note">${escapeHtml(t('mcpOauthHint'))}</div>`
+          : preset ? `<div class="provider-inline-note">${escapeHtml(getMcpPresetBody(server.presetId))}</div>` : '<div></div>'}
+        <div class="mcp-footer-actions">
+          ${server.hasAuthToken || server.authTokenSource || server.authTokenEnv
+            ? `<div class="provider-inline-note">${escapeHtml(formatMcpSecretSource(server.authTokenSource || (server.authTokenEnv ? 'env' : 'config')))}</div>`
+            : '<div></div>'}
+          ${server.authType === 'oauth' && isRemote
+            ? `<button type="button" class="secondary" data-mcp-action="start-oauth" data-mcp-id="${escapeHtml(server.id)}">${escapeHtml(t('mcpOauthAuthorize'))}</button>`
+            : '<div></div>'}
+          ${server.authType === 'bearer'
+            ? `<button type="button" class="secondary" data-mcp-action="clear-token" data-mcp-index="${index}">${escapeHtml(t('mcpClearToken'))}</button>`
+            : '<div></div>'}
+        </div>
+      </div>
+      ${diagnostic?.error ? `<div class="provider-inline-note error-note">${escapeHtml(diagnostic.error)}</div>` : ''}
+    </article>
+  `
+}
+
+function getMcpPresetLabel(presetId) {
+  if (presetId === 'github') {
+    return t('mcpPresetGithub')
+  }
+  if (presetId === 'notion') {
+    return t('mcpPresetNotion')
+  }
+  if (presetId === 'figma') {
+    return t('mcpPresetFigma')
+  }
+  if (presetId === 'browser') {
+    return t('mcpPresetBrowser')
+  }
+  return 'MCP'
+}
+
+function getMcpPresetBody(presetId) {
+  if (presetId === 'github') {
+    return t('mcpPresetGithubBody')
+  }
+  if (presetId === 'notion') {
+    return t('mcpPresetNotionBody')
+  }
+  if (presetId === 'figma') {
+    return t('mcpPresetFigmaBody')
+  }
+  if (presetId === 'browser') {
+    return t('mcpPresetBrowserBody')
+  }
+  return ''
+}
+
+function cloneMcpServers(settings = state.settings) {
+  return (settings?.mcp?.servers ?? []).map(server => ({
+    id: String(server.id ?? '').trim() || createClientId('mcp'),
+    presetId: String(server.presetId ?? '').trim(),
+    name: String(server.name ?? '').trim() || 'Custom MCP',
+    transport: ['http', 'sse', 'stdio'].includes(server.transport) ? server.transport : 'stdio',
+    url: String(server.url ?? '').trim(),
+    command: String(server.command ?? '').trim(),
+    argsText: String(server.argsText ?? '').trim(),
+    headersText: String(server.headersText ?? '').trim(),
+    authType: ['none', 'bearer', 'oauth'].includes(server.authType) ? server.authType : 'none',
+    authTokenEnv: String(server.authTokenEnv ?? '').trim(),
+    authTokenSource: String(server.authTokenSource ?? '').trim(),
+    authToken: String(server.authToken ?? ''),
+    oauthAuthorizationUrl: String(server.oauthAuthorizationUrl ?? '').trim(),
+    oauthTokenUrl: String(server.oauthTokenUrl ?? '').trim(),
+    oauthClientId: String(server.oauthClientId ?? '').trim(),
+    oauthClientSecretEnv: String(server.oauthClientSecretEnv ?? '').trim(),
+    oauthScopes: String(server.oauthScopes ?? '').trim(),
+    hasAuthToken: server.hasAuthToken === true,
+    clearAuthToken: server.clearAuthToken === true,
+    enabled: server.enabled !== false,
+  }))
+}
+
+function createClientId(prefix) {
+  if (globalThis.crypto?.randomUUID) {
+    return `${prefix}-${globalThis.crypto.randomUUID()}`
+  }
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function createMcpServer(source = {}) {
+  return {
+    id: createClientId('mcp'),
+    presetId: String(source.presetId ?? '').trim(),
+    name: String(source.name ?? '').trim() || 'Custom MCP',
+    transport: ['http', 'sse', 'stdio'].includes(source.transport) ? source.transport : 'stdio',
+    url: String(source.url ?? '').trim(),
+    command: String(source.command ?? '').trim(),
+    argsText: String(source.argsText ?? '').trim(),
+    headersText: String(source.headersText ?? '').trim(),
+    authType: ['none', 'bearer', 'oauth'].includes(source.authType) ? source.authType : 'none',
+    authTokenEnv: String(source.authTokenEnv ?? '').trim(),
+    authTokenSource: String(source.authTokenSource ?? '').trim(),
+    authToken: String(source.authToken ?? ''),
+    oauthAuthorizationUrl: String(source.oauthAuthorizationUrl ?? '').trim(),
+    oauthTokenUrl: String(source.oauthTokenUrl ?? '').trim(),
+    oauthClientId: String(source.oauthClientId ?? '').trim(),
+    oauthClientSecretEnv: String(source.oauthClientSecretEnv ?? '').trim(),
+    oauthScopes: String(source.oauthScopes ?? '').trim(),
+    hasAuthToken: source.hasAuthToken === true,
+    clearAuthToken: source.clearAuthToken === true,
+    enabled: source.enabled !== false,
+  }
+}
+
+function formatMcpSecretSource(source) {
+  if (source === 'keychain') {
+    return t('mcpSecretKeychain')
+  }
+  if (source === 'env') {
+    return t('mcpSecretEnv')
+  }
+  if (source === 'config') {
+    return t('mcpSecretConfig')
+  }
+  return ''
+}
+
+function ensureMcpSettingsState() {
+  const servers = cloneMcpServers(state.settings)
+  state.settings = {
+    ...(state.settings ?? {}),
+    mcp: {
+      ...(state.settings?.mcp ?? {}),
+      servers,
+    },
+  }
+  return servers
+}
+
+function upsertMcpDiagnostic(diagnostic) {
+  const current = [...(state.settings?.mcp?.diagnostics ?? [])]
+  const index = current.findIndex(item => item.serverId === diagnostic.serverId)
+  if (index >= 0) {
+    current[index] = diagnostic
+  } else {
+    current.push(diagnostic)
+  }
+  return current
+}
+
+async function testMcpServerConnection(serverId) {
+  const servers = ensureMcpSettingsState()
+  const server = servers.find(item => item.id === serverId)
+  if (!server) {
+    return
+  }
+
+  setBusy(true, t('mcpTestConnection'))
+  try {
+    const result = await fetchJson('/api/mcp/test', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server }),
+    })
+
+    const diagnostic = result.diagnostic
+    const nextServers = result.mcp?.servers ?? servers
+    state.settings = {
+      ...state.settings,
+      mcp: {
+        ...(state.settings?.mcp ?? {}),
+        servers: nextServers,
+        diagnostics: diagnostic ? upsertMcpDiagnostic(diagnostic) : (state.settings?.mcp?.diagnostics ?? []),
+      },
+    }
+    renderMcpDiagnostics(state.settings)
+    renderMcpServers(state.settings)
+    renderIntegrations(state.settings)
+    setBusy(false, diagnostic?.ok ? t('mcpConnected') : t('mcpConnectionError'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function startMcpOAuth(serverId) {
+  const servers = ensureMcpSettingsState()
+  const server = servers.find(item => item.id === serverId)
+  if (!server) {
+    return
+  }
+
+  server.authType = 'oauth'
+  setBusy(true, t('mcpOauthStarting'))
+  try {
+    const result = await fetchJson('/api/mcp/oauth/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server }),
+    })
+    if (!result.authorizationUrl) {
+      throw new Error('OAuth start did not return an authorization URL')
+    }
+    await fetchJson('/api/open-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: result.authorizationUrl }),
+    })
+    state.pendingMcpOAuthRefresh = true
+    setBusy(false, t('mcpOauthStarted'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
 function renderSkills(settings) {
   skillsPanel.innerHTML = ''
   if (!(settings.skills ?? []).length) {
@@ -1081,6 +2259,7 @@ function renderMemory(settings) {
   const sessions = settings.sessions ?? []
   const notes = settings.notes ?? []
   const tasks = settings.tasks ?? []
+  syncTaskReminderState(tasks)
 
   const sessionMarkup = sessions.length
     ? sessions.map(session => renderSessionCardMarkup(session, {
@@ -1112,7 +2291,9 @@ function updateModelStatus() {
     modelStatus.textContent = t('modelNotSelected')
     runtimeSummary.textContent = t('runtimeWaiting')
     connectionSummary.textContent = t('noActiveModel')
+    setHeaderSummary(headerModelSummary, t('headerModelLabel'), t('noActiveModel'), 'muted')
     sendButton.disabled = true
+    setStatusIndicator(t('modelNotSelected'), 'muted')
     return
   }
 
@@ -1121,8 +2302,16 @@ function updateModelStatus() {
   runtimeSummary.textContent = current.available
     ? `${formatAssistantProfileLabel(assistantProfileSelect.value)} · ${modeSelect.value.toUpperCase()} · ${agentToggle.checked ? `agent ${normalizeSteps(agentSteps.value)} step` : 'agent off'}`
     : current.availabilityMessage
-  connectionSummary.textContent = `${current.id} · ${current.available ? t('online') : t('setupRequired')}`
+    connectionSummary.textContent = `${current.id} · ${current.available ? t('online') : t('setupRequired')}`
+  setHeaderSummary(
+    headerModelSummary,
+    t('headerModelLabel'),
+    current.id,
+    current.available ? 'online' : 'warning',
+    `${current.id} · ${current.available ? t('online') : t('setupRequired')}`,
+  )
   sendButton.disabled = !current.available
+  setStatusIndicator(current.available ? t('ready') : t('setupRequired'), current.available ? 'ready' : 'warning')
 }
 
 function updateSessionIndicators() {
@@ -1136,9 +2325,475 @@ function updateSessionIndicators() {
   memorySessionBadge.textContent = state.sessionId
     ? `${t('sessionActive')} · ${state.sessionId.slice(0, 8)}…`
     : t('newSessionBadge')
-  workspaceSummary.textContent = state.settings?.workspaceDir
-    ? `${t('workspaceLabel')} · ${state.settings.workspaceDir}`
+  const workspacePath = state.settings?.workspaceDir || ''
+  const workspaceDisplay = workspacePath
+    ? summarizeWorkspacePath(workspacePath)
     : t('workspaceReady')
+  workspaceSummary.textContent = workspacePath
+    ? `${t('workspaceLabel')} · ${workspaceDisplay}`
+    : t('workspaceReady')
+  setHeaderSummary(
+    headerWorkspaceSummary,
+    t('workspaceLabel'),
+    workspaceDisplay,
+    workspacePath ? 'ready' : 'muted',
+    workspacePath,
+  )
+  setHeaderSummary(
+    headerSessionSummary,
+    t('headerSessionLabel'),
+    state.sessionId ? state.sessionId.slice(0, 8) : t('newSessionBadge'),
+    state.sessionId ? 'ready' : 'muted',
+    state.sessionId || '',
+  )
+}
+
+async function refreshWorkspaceOutline() {
+  try {
+    state.workspaceOutline = await fetchJson('/api/workspace/outline')
+  } catch {
+    state.workspaceOutline = null
+  }
+  renderWorkspaceOutline()
+  renderCommandPalette()
+}
+
+async function saveWorkspaceRoot() {
+  const nextRoot = workspaceRootInput?.value?.trim()
+  if (!nextRoot) {
+    return
+  }
+
+  setBusy(true, t('workspaceRootSaving'))
+  try {
+    const result = await fetchJson('/api/workspace/root', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: nextRoot }),
+    })
+    state.settings = {
+      ...(state.settings ?? {}),
+      workspaceDir: result.workspaceDir,
+    }
+    state.workspaceOutline = result.outline ?? null
+    closeWorkspaceFile()
+    renderWorkspaceOutline()
+    renderCommandPalette()
+    renderHeaderContext()
+    setBusy(false, t('workspaceRootSaved'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+function renderWorkspaceOutline() {
+  if (!workspaceOutlineRoot || !workspaceOutlineTree) {
+    return
+  }
+
+  const root = state.workspaceOutline?.root || state.settings?.workspaceDir || '~'
+  workspaceOutlineRoot.textContent = summarizeWorkspacePath(root)
+  if (workspaceRootInput && document.activeElement !== workspaceRootInput) {
+    workspaceRootInput.value = root
+  }
+
+  const nodes = state.workspaceOutline?.nodes ?? []
+  workspaceOutlineTree.innerHTML = nodes.length
+    ? `<div class="outline-tree">${renderOutlineNodes(nodes)}</div>`
+    : `<div class="empty-card">${escapeHtml(t('workspaceOutlineEmpty'))}</div>`
+  renderWorkspaceFileEditor()
+}
+
+function renderWorkspaceFileEditor() {
+  if (!workspaceFileEditorShell || !workspaceFileInput || !workspaceFileTitle || !workspaceFileMeta) {
+    return
+  }
+
+  const currentFile = state.workspaceFile ?? {}
+  const hasFile = Boolean(currentFile.path)
+  workspaceFileEditorShell.classList.toggle('hidden', !hasFile)
+  if (!hasFile) {
+    workspaceFileInput.value = ''
+    workspaceFileTitle.textContent = t('workspaceFileEditorTitle')
+    workspaceFileMeta.textContent = t('workspaceFileEditorCopy')
+    return
+  }
+
+  workspaceFileTitle.textContent = currentFile.path
+  workspaceFileMeta.textContent = currentFile.dirty
+    ? t('workspaceFileDirty')
+    : `${formatFileSize(currentFile.size)}${currentFile.modifiedAt ? ` · ${formatTimestamp(currentFile.modifiedAt)}` : ''}`
+
+  if (document.activeElement !== workspaceFileInput && workspaceFileInput.value !== currentFile.content) {
+    workspaceFileInput.value = currentFile.content
+  }
+}
+
+async function loadWorkspaceFile(path) {
+  const relativePath = String(path ?? '').trim()
+  if (!relativePath) {
+    return
+  }
+
+  setBusy(true, t('workspaceFileLoading'))
+  try {
+    const file = await fetchJson(`/api/workspace/file?path=${encodeURIComponent(relativePath)}`)
+    state.workspaceFile = {
+      path: file.path,
+      content: file.content ?? '',
+      dirty: false,
+      size: file.size ?? 0,
+      modifiedAt: file.modifiedAt ?? '',
+    }
+    openWorkspaceOutline()
+    renderWorkspaceFileEditor()
+    setBusy(false, file.path)
+    window.requestAnimationFrame(() => workspaceFileInput?.focus())
+  } catch (error) {
+    setBusy(false, t('workspaceFileLoadError'), 'error')
+    showError(error)
+  }
+}
+
+function onWorkspaceFileInput(event) {
+  state.workspaceFile = {
+    ...(state.workspaceFile ?? {}),
+    content: event.target.value,
+    dirty: true,
+  }
+  renderWorkspaceFileEditor()
+}
+
+async function saveWorkspaceFile() {
+  const currentFile = state.workspaceFile ?? {}
+  if (!currentFile.path) {
+    return
+  }
+
+  setBusy(true, t('workspaceFileSave'))
+  try {
+    const result = await fetchJson('/api/workspace/file', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        path: currentFile.path,
+        content: currentFile.content ?? '',
+      }),
+    })
+    state.workspaceFile = {
+      ...currentFile,
+      dirty: false,
+      size: result.size ?? currentFile.size,
+      modifiedAt: result.modifiedAt ?? currentFile.modifiedAt,
+    }
+    renderWorkspaceFileEditor()
+    await refreshWorkspaceOutline()
+    setBusy(false, t('workspaceFileSaved'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+function closeWorkspaceFile() {
+  state.workspaceFile = {
+    path: '',
+    content: '',
+    dirty: false,
+    size: 0,
+    modifiedAt: '',
+  }
+  renderWorkspaceFileEditor()
+}
+
+function formatFileSize(size) {
+  const value = Number(size)
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0 B'
+  }
+  if (value < 1024) {
+    return `${Math.round(value)} B`
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function renderOutlineNodes(nodes) {
+  return nodes.map(node => {
+    if (node.type === 'dir') {
+      return `
+        <details class="outline-node" open>
+          <summary>
+            <span class="outline-node-name">${escapeHtml(node.name)}</span>
+            <span class="outline-node-path">${escapeHtml(node.relativePath || node.path)}</span>
+          </summary>
+          <div class="outline-node-children">
+            ${renderOutlineNodes(node.children ?? [])}
+          </div>
+        </details>
+      `
+    }
+
+    return `
+      <button type="button" class="outline-file" data-outline-path="${escapeHtml(node.relativePath || node.path)}">
+        <span class="outline-node-name">${escapeHtml(node.name)}</span>
+        <span class="outline-node-path">${escapeHtml(node.relativePath || node.path)}</span>
+      </button>
+    `
+  }).join('')
+}
+
+function flattenOutlineNodes(nodes, bucket = []) {
+  for (const node of nodes ?? []) {
+    bucket.push(node)
+    if (Array.isArray(node.children) && node.children.length) {
+      flattenOutlineNodes(node.children, bucket)
+    }
+  }
+  return bucket
+}
+
+function toggleWorkspaceOutline() {
+  state.outlineOpen = !state.outlineOpen
+  syncOutlineLayout()
+}
+
+function openWorkspaceOutline() {
+  state.outlineOpen = true
+  syncOutlineLayout()
+}
+
+function closeWorkspaceOutline() {
+  state.outlineOpen = false
+  syncOutlineLayout()
+}
+
+function syncOutlineLayout() {
+  if (workspaceOutline) {
+    workspaceOutline.classList.toggle('hidden', !state.outlineOpen)
+  }
+  if (shell) {
+    shell.dataset.outlineOpen = String(state.outlineOpen)
+  }
+  if (toggleOutlineButton) {
+    toggleOutlineButton.classList.toggle('is-active', state.outlineOpen)
+    toggleOutlineButton.setAttribute('aria-label', t('workspaceOutlineOpen'))
+    toggleOutlineButton.setAttribute('title', t('workspaceOutlineOpen'))
+  }
+}
+
+function insertPathIntoComposer(path) {
+  const nextValue = String(path ?? '').trim()
+  if (!nextValue) {
+    return
+  }
+
+  promptInput.value = promptInput.value.trim()
+    ? `${promptInput.value.trim()}\n${nextValue}`
+    : nextValue
+  resizeComposerInput()
+  promptInput.focus()
+  setStatusIndicator(t('insertedPath'), 'ready')
+}
+
+function openCommandPalette(query = '') {
+  state.commandPaletteOpen = true
+  state.commandPaletteQuery = query
+  syncCommandPalette()
+}
+
+function closeCommandPalette() {
+  state.commandPaletteOpen = false
+  syncCommandPalette()
+}
+
+function syncCommandPalette() {
+  if (!commandPaletteOverlay) {
+    return
+  }
+
+  if (commandPaletteButton) {
+    commandPaletteButton.setAttribute('aria-label', t('commandPaletteOpen'))
+    commandPaletteButton.setAttribute('title', t('commandPaletteOpen'))
+  }
+  commandPaletteOverlay.classList.toggle('hidden', !state.commandPaletteOpen)
+  if (commandPaletteInput) {
+    commandPaletteInput.value = state.commandPaletteQuery
+  }
+  renderCommandPalette()
+
+  if (state.commandPaletteOpen) {
+    window.requestAnimationFrame(() => {
+      commandPaletteInput?.focus()
+      commandPaletteInput?.select()
+    })
+  }
+}
+
+function renderCommandPalette() {
+  if (!commandPaletteResults) {
+    return
+  }
+
+  const query = state.commandPaletteQuery.trim().toLowerCase()
+  const sections = buildCommandPaletteSections(query)
+  const visibleSections = sections.filter(section => section.items.length)
+
+  if (!visibleSections.length) {
+    commandPaletteResults.innerHTML = `<div class="empty-card">${escapeHtml(t('commandPaletteEmpty'))}</div>`
+    return
+  }
+
+  commandPaletteResults.innerHTML = visibleSections.map(section => `
+    <section class="command-palette-section">
+      <div class="command-palette-section-title">${escapeHtml(section.title)}</div>
+      <div class="command-palette-list">
+        ${section.items.map((item, index) => `
+          <button type="button" class="command-palette-item" data-command-kind="${escapeHtml(item.kind)}" data-command-value="${escapeHtml(item.value)}" ${index === 0 ? 'data-command-default="true"' : ''}>
+            <span class="command-palette-item-title">${escapeHtml(item.title)}</span>
+            <span class="command-palette-item-meta">${escapeHtml(item.meta)}</span>
+          </button>
+        `).join('')}
+      </div>
+    </section>
+  `).join('')
+}
+
+function buildCommandPaletteSections(query) {
+  const actions = [
+    { value: 'new-chat', title: t('commandPaletteActionNewChat'), meta: t('newChat') },
+    { value: 'settings', title: t('commandPaletteActionSettings'), meta: t('settings') },
+    { value: 'activity', title: t('commandPaletteActionActivity'), meta: t('activity') },
+    { value: 'outline', title: t('commandPaletteActionOutline'), meta: t('workspaceOutlineTitle') },
+    { value: 'providers', title: t('commandPaletteActionProviders'), meta: t('localLabel') },
+    { value: 'extensions', title: t('commandPaletteActionExtensions'), meta: t('extensionsTab') },
+    { value: 'automation', title: t('commandPaletteActionAutomation'), meta: t('automationTab') },
+    { value: 'composer', title: t('commandPaletteActionFocusComposer'), meta: '⌘↩' },
+  ]
+    .filter(item => matchesCommandQuery(item, query))
+    .map(item => ({ ...item, kind: 'action' }))
+
+  const chats = (state.settings?.sessions ?? [])
+    .map(session => ({
+      kind: 'chat',
+      value: session.sessionId,
+      title: summarizeTitle(session.preview, t('newChat')),
+      meta: session.sessionId.slice(0, 8),
+    }))
+    .filter(item => matchesCommandQuery(item, query))
+    .slice(0, 6)
+
+  const files = flattenOutlineNodes(state.workspaceOutline?.nodes ?? [])
+    .filter(node => node.type === 'file')
+    .map(node => ({
+      kind: 'file',
+      value: node.relativePath || node.path,
+      title: node.name,
+      meta: node.relativePath || node.path,
+    }))
+    .filter(item => matchesCommandQuery(item, query))
+    .slice(0, 10)
+
+  return [
+    { title: t('commandPaletteSectionActions'), items: actions },
+    { title: t('commandPaletteSectionChats'), items: chats },
+    { title: t('commandPaletteSectionFiles'), items: files },
+  ]
+}
+
+function matchesCommandQuery(item, query) {
+  if (!query) {
+    return true
+  }
+  const haystack = `${item.title} ${item.meta} ${item.value}`.toLowerCase()
+  return haystack.includes(query)
+}
+
+async function handleCommandPaletteSelection(kind, value) {
+  if (kind === 'action') {
+    if (value === 'new-chat') {
+      onClear()
+    } else if (value === 'settings') {
+      openSettingsDrawer({ drawerTab: 'general' })
+    } else if (value === 'activity') {
+      openActivityDrawer()
+    } else if (value === 'outline') {
+      toggleWorkspaceOutline()
+    } else if (value === 'providers') {
+      openSettingsDrawer({ drawerTab: 'general', providerTab: 'local', scrollToProviders: true })
+    } else if (value === 'extensions') {
+      openSettingsDrawer({ drawerTab: 'extensions' })
+    } else if (value === 'automation') {
+      openSettingsDrawer({ drawerTab: 'automation' })
+    } else if (value === 'composer') {
+      promptInput.focus()
+    }
+    closeCommandPalette()
+    return
+  }
+
+  if (kind === 'chat') {
+    closeCommandPalette()
+    await loadSessionById(value)
+    return
+  }
+
+  if (kind === 'file') {
+    closeCommandPalette()
+    await loadWorkspaceFile(value)
+  }
+}
+
+function onCommandPaletteClick(event) {
+  const button = event.target.closest('[data-command-kind]')
+  if (!button) {
+    return
+  }
+
+  void handleCommandPaletteSelection(button.dataset.commandKind, button.dataset.commandValue)
+}
+
+function onCommandPaletteKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeCommandPalette()
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const firstItem = commandPaletteResults?.querySelector('[data-command-kind]')
+    if (firstItem) {
+      void handleCommandPaletteSelection(firstItem.dataset.commandKind, firstItem.dataset.commandValue)
+    }
+  }
+}
+
+function onWorkspaceOutlineClick(event) {
+  const button = event.target.closest('[data-outline-path]')
+  if (!button) {
+    return
+  }
+
+  void loadWorkspaceFile(button.dataset.outlinePath)
+}
+
+function onGlobalKeydown(event) {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    if (state.commandPaletteOpen) {
+      closeCommandPalette()
+    } else {
+      openCommandPalette()
+    }
+    return
+  }
+
+  if (event.key === 'Escape' && state.commandPaletteOpen) {
+    event.preventDefault()
+    closeCommandPalette()
+  }
 }
 
 function renderAssistantProfileBadges() {
@@ -1583,6 +3238,7 @@ async function onSaveSettings() {
     })
     state.settings = settings
     renderSettings(settings)
+    await refreshWorkspaceOutline()
     setBusy(false, t('settingsSaved'))
     return true
   } catch (error) {
@@ -1686,7 +3342,7 @@ function resolveRequestModel() {
 
   modelSelect.value = fallback.id
   updateModelStatus()
-  statusBox.textContent = t('visionSelected', { model: fallback.id })
+  setStatusIndicator(t('visionSelected', { model: fallback.id }), 'ready')
   return fallback
 }
 
@@ -1760,6 +3416,9 @@ function collectSettingsPatch() {
     },
     plugins: {
       active: [...pluginsPanel.querySelectorAll('input[data-plugin-id]:checked')].map(node => node.dataset.pluginId),
+    },
+    mcp: {
+      servers: cloneMcpServers(state.settings),
     },
     providers: providerUpdates,
   }
@@ -1911,7 +3570,7 @@ function setBusy(isBusy, label) {
   saveSettingsButton.disabled = isBusy
   clearButton.disabled = isBusy
   attachImageButton.disabled = isBusy
-  statusBox.textContent = label
+  setStatusIndicator(label, isBusy ? 'busy' : 'ready')
   if (isBusy) {
     sendButton.disabled = true
   } else {
@@ -2015,6 +3674,102 @@ async function refreshMemoryData() {
   }
 }
 
+function showConfirmDialog({ title, message }) {
+  if (!confirmOverlay || !confirmTitle || !confirmMessage) {
+    return Promise.resolve(window.confirm(message || title || 'Confirm'))
+  }
+
+  if (confirmDialogResolve) {
+    resolveConfirmDialog(false)
+  }
+
+  confirmTitle.textContent = title
+  confirmMessage.textContent = message
+  confirmOverlay.classList.remove('hidden')
+
+  return new Promise(resolve => {
+    confirmDialogResolve = resolve
+  })
+}
+
+function resolveConfirmDialog(approved) {
+  if (confirmOverlay) {
+    confirmOverlay.classList.add('hidden')
+  }
+
+  const resolve = confirmDialogResolve
+  confirmDialogResolve = null
+  if (resolve) {
+    resolve(Boolean(approved))
+  }
+}
+
+function openTaskEditor(task) {
+  if (!taskEditorOverlay || !taskEditorForm) {
+    return Promise.resolve(null)
+  }
+
+  if (taskEditorResolve) {
+    closeTaskEditor()
+  }
+
+  taskEditorForm.dataset.taskId = task.taskId
+  taskEditorTitleInput.value = task.title ?? ''
+  taskEditorGoalInput.value = task.goal ?? ''
+  taskEditorConstraintsInput.value = task.constraints ?? ''
+  taskEditorDueInput.value = toDateTimeLocalValue(task.delivery)
+  taskEditorCompletionInput.value = task.completion ?? ''
+  taskEditorOverlay.classList.remove('hidden')
+  taskEditorTitleInput.focus()
+  taskEditorTitleInput.select()
+
+  return new Promise(resolve => {
+    taskEditorResolve = resolve
+  })
+}
+
+function closeTaskEditor(result = null) {
+  if (taskEditorOverlay) {
+    taskEditorOverlay.classList.add('hidden')
+  }
+  if (taskEditorForm) {
+    taskEditorForm.dataset.taskId = ''
+  }
+
+  const resolve = taskEditorResolve
+  taskEditorResolve = null
+  if (resolve) {
+    resolve(result)
+  }
+}
+
+async function onTaskEditorSubmit(event) {
+  event.preventDefault()
+
+  const title = taskEditorTitleInput.value.trim()
+  if (!title) {
+    showError(t('taskTitleRequired'))
+    taskEditorTitleInput.focus()
+    return
+  }
+
+  closeTaskEditor({
+    title,
+    goal: taskEditorGoalInput.value.trim(),
+    constraints: taskEditorConstraintsInput.value.trim(),
+    delivery: fromDateTimeLocalValue(taskEditorDueInput.value),
+    completion: taskEditorCompletionInput.value.trim(),
+  })
+}
+
+function toDateTimeLocalValue(value) {
+  return String(value ?? '').trim().replace(' ', 'T')
+}
+
+function fromDateTimeLocalValue(value) {
+  return String(value ?? '').trim().replace('T', ' ')
+}
+
 function openApprovalModal(request) {
   approvalTitle.textContent = uiLanguage() === 'tr'
     ? `${request.toolName} için izin gerekiyor`
@@ -2113,17 +3868,23 @@ async function onSessionCardClick(event) {
       return
     }
 
-    const confirmed = window.confirm(t('deleteChatConfirm'))
+    const session = (state.settings?.sessions ?? []).find(item => item.sessionId === sessionId)
+    const confirmed = await showConfirmDialog({
+      title: t('deleteChatConfirmTitle'),
+      message: t('deleteChatConfirmBody', {
+        title: summarizeTitle(session?.preview, t('newChat')),
+      }),
+    })
     if (!confirmed) {
       return
     }
 
     setBusy(true, t('deletingChat'))
     try {
-      removeSessionFromLocalState(sessionId)
       await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE',
       })
+      removeSessionFromLocalState(sessionId)
 
       if (state.sessionId === sessionId) {
         onClear()
@@ -2148,6 +3909,10 @@ async function onSessionCardClick(event) {
     return
   }
 
+  await loadSessionById(sessionId)
+}
+
+async function loadSessionById(sessionId) {
   setBusy(true, t('loadingChat'))
   try {
     const session = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}`)
@@ -2173,6 +3938,39 @@ async function onSessionCardClick(event) {
 }
 
 async function onScheduledTasksClick(event) {
+  const editButton = event.target.closest('[data-edit-task-id]')
+  if (editButton) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const taskId = editButton.dataset.editTaskId
+    const task = (state.settings?.tasks ?? []).find(item => item.taskId === taskId)
+    if (!task) {
+      return
+    }
+
+    const payload = await openTaskEditor(task)
+    if (!payload) {
+      return
+    }
+
+    setBusy(true, t('editingTask'))
+    try {
+      await fetchJson(`/api/tasks/${encodeURIComponent(taskId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      state.remindedTaskIds.delete(taskId)
+      await refreshMemoryData()
+      setBusy(false, t('taskUpdated'))
+    } catch (error) {
+      await refreshMemoryData()
+      showError(error)
+    }
+    return
+  }
+
   const deleteButton = event.target.closest('[data-delete-task-id]')
   if (!deleteButton) {
     return
@@ -2186,17 +3984,23 @@ async function onScheduledTasksClick(event) {
     return
   }
 
-  const confirmed = window.confirm(t('deleteTaskConfirm'))
+  const task = (state.settings?.tasks ?? []).find(item => item.taskId === taskId)
+  const confirmed = await showConfirmDialog({
+    title: t('deleteTaskConfirmTitle'),
+    message: t('deleteTaskConfirmBody', {
+      title: summarizeTitle(task?.title, t('newTask')),
+    }),
+  })
   if (!confirmed) {
     return
   }
 
   setBusy(true, t('deletingTask'))
   try {
-    removeTaskFromLocalState(taskId)
     await fetchJson(`/api/tasks/${encodeURIComponent(taskId)}`, {
       method: 'DELETE',
     })
+    removeTaskFromLocalState(taskId)
     state.remindedTaskIds.delete(taskId)
     await refreshMemoryData()
     setBusy(false, t('deletedTask'))
@@ -2281,9 +4085,535 @@ function setDrawerTab(tab) {
   }
 }
 
+async function onSettingsDrawerActionClick(event) {
+  const guideAction = event.target.closest('[data-guide-action]')
+  if (guideAction) {
+    const action = guideAction.dataset.guideAction
+    if (action === 'providers') {
+      openSettingsDrawer({ drawerTab: 'general', providerTab: 'local', scrollToProviders: true })
+      return
+    }
+    if (action === 'automation') {
+      openSettingsDrawer({ drawerTab: 'automation' })
+      return
+    }
+  }
+
+  const mcpAction = event.target.closest('[data-mcp-action]')
+  if (mcpAction) {
+    event.preventDefault()
+    const action = mcpAction.dataset.mcpAction
+    const servers = ensureMcpSettingsState()
+
+    if (action === 'add-server') {
+      servers.push(createMcpServer({
+        name: 'Custom MCP',
+        transport: 'stdio',
+        enabled: false,
+      }))
+    }
+
+    if (action === 'add-preset') {
+      const presetId = mcpAction.dataset.mcpPreset
+      const preset = presetId ? MCP_PRESETS[presetId] : null
+      if (preset) {
+        const existing = servers.find(server => server.presetId === preset.id)
+        if (existing) {
+          existing.name ||= preset.name
+          existing.transport = existing.transport || preset.transport
+          existing.url ||= preset.url ?? ''
+          existing.command ||= preset.command ?? ''
+          existing.argsText ||= preset.argsText ?? ''
+          existing.headersText ||= preset.headersText ?? ''
+          existing.authType ||= preset.authType ?? 'none'
+          existing.authTokenEnv ||= preset.authTokenEnv ?? ''
+          existing.oauthAuthorizationUrl ||= preset.oauthAuthorizationUrl ?? ''
+          existing.oauthTokenUrl ||= preset.oauthTokenUrl ?? ''
+          existing.oauthClientId ||= preset.oauthClientId ?? ''
+          existing.oauthClientSecretEnv ||= preset.oauthClientSecretEnv ?? ''
+          existing.oauthScopes ||= preset.oauthScopes ?? ''
+          existing.enabled = true
+        } else {
+          servers.push(createMcpServer({
+            presetId: preset.id,
+            name: preset.name,
+            transport: preset.transport,
+            url: preset.url ?? '',
+            command: preset.command ?? '',
+            argsText: preset.argsText ?? '',
+            headersText: preset.headersText ?? '',
+            authType: preset.authType ?? 'none',
+            authTokenEnv: preset.authTokenEnv ?? '',
+            oauthAuthorizationUrl: preset.oauthAuthorizationUrl ?? '',
+            oauthTokenUrl: preset.oauthTokenUrl ?? '',
+            oauthClientId: preset.oauthClientId ?? '',
+            oauthClientSecretEnv: preset.oauthClientSecretEnv ?? '',
+            oauthScopes: preset.oauthScopes ?? '',
+            enabled: true,
+          }))
+        }
+      }
+    }
+
+    if (action === 'remove-server') {
+      const index = Number(mcpAction.dataset.mcpIndex)
+      if (Number.isFinite(index) && index >= 0) {
+        servers.splice(index, 1)
+      }
+    }
+
+    if (action === 'clear-token') {
+      const index = Number(mcpAction.dataset.mcpIndex)
+      if (Number.isFinite(index) && index >= 0 && servers[index]) {
+        servers[index].authToken = ''
+        servers[index].hasAuthToken = false
+        servers[index].authTokenSource = ''
+        servers[index].clearAuthToken = true
+      }
+    }
+
+    if (action === 'test-server') {
+      const serverId = mcpAction.dataset.mcpId
+      if (serverId) {
+        await testMcpServerConnection(serverId)
+      }
+      return
+    }
+
+    if (action === 'start-oauth') {
+      const serverId = mcpAction.dataset.mcpId
+      if (serverId) {
+        await startMcpOAuth(serverId)
+      }
+      return
+    }
+
+    state.settings = {
+      ...state.settings,
+      mcp: {
+        ...(state.settings?.mcp ?? {}),
+        servers,
+      },
+    }
+    renderMcpDiagnostics(state.settings)
+    renderMcpServers(state.settings)
+    renderIntegrations(state.settings)
+    return
+  }
+
+  const billingAction = event.target.closest('[data-billing-action]')
+  if (billingAction) {
+    event.preventDefault()
+    const action = billingAction.dataset.billingAction
+    if (action === 'start-trial') {
+      await startBillingTrial()
+      return
+    }
+    if (action === 'open-card') {
+      await openCardCheckout(billingAction.dataset.planId)
+      return
+    }
+    if (action === 'create-crypto-payment') {
+      await createBillingCryptoPayment()
+      return
+    }
+    if (action === 'refresh-payment') {
+      await refreshBillingPayment(billingAction.dataset.paymentId)
+      return
+    }
+    if (action === 'simulate-payment') {
+      await simulateBillingPayment(billingAction.dataset.paymentId)
+      return
+    }
+    if (action === 'claim-payment') {
+      await claimBillingPayment(billingAction.dataset.paymentId)
+      return
+    }
+  }
+
+  const copyAction = event.target.closest('[data-copy-value]')
+  if (copyAction) {
+    event.preventDefault()
+    await copyBillingValue(copyAction.dataset.copyValue || '')
+    return
+  }
+
+  const externalAction = event.target.closest('[data-open-url]')
+  if (!externalAction) {
+    return
+  }
+
+  const url = externalAction.dataset.openUrl
+  if (!url) {
+    return
+  }
+
+  event.preventDefault()
+  try {
+    await fetchJson('/api/open-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url }),
+    })
+    setBusy(false, t('ready'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+function onSettingsDrawerInput(event) {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+
+  const mcpField = target.closest('[data-mcp-field]')
+  if (
+    mcpField &&
+    (mcpField instanceof HTMLInputElement || mcpField instanceof HTMLSelectElement || mcpField instanceof HTMLTextAreaElement)
+  ) {
+    const wrapper = mcpField.closest('[data-mcp-index]')
+    const index = Number(wrapper?.dataset.mcpIndex)
+    if (Number.isFinite(index)) {
+      const servers = ensureMcpSettingsState()
+      const server = servers[index]
+      if (server) {
+        const field = mcpField.dataset.mcpField
+        if (field === 'enabled') {
+          server.enabled = mcpField instanceof HTMLInputElement ? mcpField.checked : Boolean(mcpField.value)
+          renderMcpDiagnostics(state.settings)
+          renderMcpServers(state.settings)
+          renderIntegrations(state.settings)
+          return
+        }
+
+        if (field) {
+          server[field] = mcpField.value
+          if (field === 'authToken') {
+            server.hasAuthToken = Boolean(mcpField.value.trim()) || server.hasAuthToken
+            server.clearAuthToken = false
+          }
+          if (field === 'authTokenEnv') {
+            server.authTokenSource = mcpField.value.trim() ? 'env' : server.authTokenSource
+          }
+          if (field === 'transport' || field === 'authType') {
+            renderMcpDiagnostics(state.settings)
+            renderMcpServers(state.settings)
+            renderIntegrations(state.settings)
+            return
+          }
+        }
+      }
+    }
+    return
+  }
+
+  const form = target.closest('[data-billing-form]')
+  if (!form) {
+    return
+  }
+
+  if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) {
+    const { name, value } = target
+    if (name && Object.hasOwn(state.billingDraft, name)) {
+      state.billingDraft[name] = value
+      if (name === 'networkId') {
+        const selectedNetwork = state.settings?.billing?.networks?.find(network => network.id === value)
+        const firstAsset = selectedNetwork?.assets?.[0]?.id ?? 'usdc'
+        if (!(selectedNetwork?.assets ?? []).some(asset => asset.id === state.billingDraft.assetId)) {
+          state.billingDraft.assetId = firstAsset
+        }
+        state.billingDraft.cryptoCurrency = state.billingDraft.assetId
+        renderBilling(state.settings ?? {})
+        return
+      }
+      if (name === 'assetId') {
+        state.billingDraft.cryptoCurrency = value
+        renderBilling(state.settings ?? {})
+        return
+      }
+    }
+  }
+}
+
+async function onSettingsDrawerSubmit(event) {
+  const form = event.target.closest?.('[data-billing-form]')
+  if (!form) {
+    return
+  }
+
+  event.preventDefault()
+  const type = form.dataset.billingForm
+  if (type === 'activate') {
+    await activateBillingLicense()
+    return
+  }
+  if (type === 'crypto') {
+    await createBillingCryptoPayment()
+    return
+  }
+  if (type === 'verify-payment') {
+    const paymentId = form.dataset.paymentId
+    const txHashInput = form.querySelector('input[name="txHash"]')
+    await verifyBillingTransfer(paymentId, txHashInput?.value ?? '')
+  }
+}
+
+async function startBillingTrial() {
+  setBusy(true, t('billingTrialStarted'))
+  try {
+    const result = await fetchJson('/api/billing/trial/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        deviceName: state.billingDraft.deviceName,
+      }),
+    })
+    await applyBillingResult(result)
+    setBusy(false, t('billingTrialStarted'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function activateBillingLicense() {
+  setBusy(true, t('billingActivating'))
+  try {
+    const result = await fetchJson('/api/billing/activate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: state.billingDraft.email,
+        deviceName: state.billingDraft.deviceName,
+        licenseKey: state.billingDraft.licenseKey,
+      }),
+    })
+    state.billingDraft.licenseKey = ''
+    await applyBillingResult(result)
+    setBusy(false, t('billingActivated'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function openCardCheckout(planId) {
+  if (!planId) {
+    return
+  }
+
+  setBusy(true, t('billingOpeningCheckout'))
+  try {
+    const result = await fetchJson('/api/billing/checkout/card', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ planId }),
+    })
+    state.billingDraft.cardPlanId = planId
+    await fetchJson('/api/open-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: result.url }),
+    })
+    setBusy(false, t('ready'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function createBillingCryptoPayment() {
+  setBusy(true, t('billingStartingCrypto'))
+  try {
+    const result = await fetchJson('/api/billing/checkout/crypto', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        planId: state.billingDraft.cryptoPlanId,
+        networkId: state.billingDraft.networkId,
+        assetId: state.billingDraft.assetId,
+        email: state.billingDraft.email,
+        deviceName: state.billingDraft.deviceName,
+        payerAddress: state.billingDraft.payerAddress,
+      }),
+    })
+    await applyBillingResult(result)
+    const latestPayment = result.billing?.payments?.[0]
+    if (latestPayment?.payUrl) {
+      await fetchJson('/api/open-link', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: latestPayment.payUrl }),
+      })
+    }
+    setBusy(false, t('billingCryptoReady'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function verifyBillingTransfer(paymentId, txHash) {
+  if (!paymentId || !String(txHash).trim()) {
+    showError(new Error(t('billingTxHashRequired')))
+    return
+  }
+
+  setBusy(true, t('billingVerifyingTransfer'))
+  try {
+    const result = await fetchJson(`/api/billing/payments/${encodeURIComponent(paymentId)}/verify-transfer`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        txHash,
+        payerAddress: state.billingDraft.payerAddress,
+      }),
+    })
+    state.billingDraft.txHash = ''
+    await applyBillingResult(result)
+    setBusy(false, t('billingTransferVerified'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function copyBillingValue(value) {
+  const text = String(value ?? '').trim()
+  if (!text) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(text)
+    setBusy(false, t('billingCopied'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function refreshBillingPayment(paymentId) {
+  if (!paymentId) {
+    return
+  }
+
+  setBusy(true, t('billingRefreshingPayment'))
+  try {
+    const result = await fetchJson(`/api/billing/payments/${encodeURIComponent(paymentId)}/refresh`, {
+      method: 'POST',
+    })
+    await applyBillingResult(result)
+    setBusy(false, t('billingPaymentUpdated'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function simulateBillingPayment(paymentId) {
+  if (!paymentId) {
+    return
+  }
+
+  setBusy(true, t('billingRefreshingPayment'))
+  try {
+    const result = await fetchJson(`/api/billing/payments/${encodeURIComponent(paymentId)}/simulate-finish`, {
+      method: 'POST',
+    })
+    await applyBillingResult(result)
+    setBusy(false, t('billingPaymentUpdated'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function claimBillingPayment(paymentId) {
+  if (!paymentId) {
+    return
+  }
+
+  setBusy(true, t('billingClaimingLicense'))
+  try {
+    state.billingClaimingPaymentIds.add(paymentId)
+    const result = await fetchJson(`/api/billing/payments/${encodeURIComponent(paymentId)}/claim`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: state.billingDraft.email,
+        deviceName: state.billingDraft.deviceName,
+      }),
+    })
+    await applyBillingResult(result)
+    setBusy(false, t('billingClaimed'))
+  } catch (error) {
+    showError(error)
+  } finally {
+    state.billingClaimingPaymentIds.delete(paymentId)
+  }
+}
+
+async function applyBillingResult(result) {
+  if (!result?.billing || !state.settings) {
+    return
+  }
+  state.settings = {
+    ...state.settings,
+    billing: result.billing,
+  }
+  renderBilling(state.settings)
+}
+
+async function maybeAutoClaimLatestPayment(billing) {
+  const payment = (billing?.payments ?? []).find(item => item.claimable)
+  if (!payment || state.billingClaimingPaymentIds.has(payment.providerPaymentId)) {
+    return
+  }
+
+  const draftEmail = String(state.billingDraft.email ?? '').trim().toLowerCase()
+  const paymentEmail = String(payment.email ?? '').trim().toLowerCase()
+  if (draftEmail && paymentEmail && draftEmail !== paymentEmail) {
+    return
+  }
+
+  state.billingClaimingPaymentIds.add(payment.providerPaymentId)
+  try {
+    const result = await fetchJson(`/api/billing/payments/${encodeURIComponent(payment.providerPaymentId)}/claim`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: state.billingDraft.email,
+        deviceName: state.billingDraft.deviceName,
+      }),
+    })
+    await applyBillingResult(result)
+  } catch {
+    // Ignore automatic claim failures and keep the explicit action visible.
+  } finally {
+    state.billingClaimingPaymentIds.delete(payment.providerPaymentId)
+  }
+}
+
 function toggleChatsSection() {
   state.chatsExpanded = !state.chatsExpanded
   syncChatsSectionUi()
+}
+
+function toggleSidebar() {
+  state.sidebarCollapsed = !state.sidebarCollapsed
+  syncShellLayout()
+}
+
+function syncShellLayout() {
+  if (shell) {
+    shell.dataset.sidebarCollapsed = String(state.sidebarCollapsed)
+  }
+  if (sidebar) {
+    sidebar.dataset.collapsed = String(state.sidebarCollapsed)
+  }
+  if (sidebarToggleButton) {
+    const label = state.sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')
+    sidebarToggleButton.setAttribute('aria-label', label)
+    sidebarToggleButton.setAttribute('title', label)
+    sidebarToggleButton.classList.toggle('is-active', state.sidebarCollapsed)
+  }
+  if (clearButton) {
+    clearButton.setAttribute('title', t('newChat'))
+  }
 }
 
 function syncChatsSectionUi() {
@@ -2292,9 +4622,28 @@ function syncChatsSectionUi() {
   }
 
   chatsSection.classList.toggle('is-collapsed', !state.chatsExpanded)
-  toggleChatsButton.textContent = state.chatsExpanded ? '−' : '+'
+  toggleChatsButton.innerHTML = state.chatsExpanded
+    ? '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5"></path></svg>'
+    : '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5.5 4.5 4.5-4.5 4.5"></path></svg>'
   toggleChatsButton.setAttribute('aria-expanded', String(state.chatsExpanded))
   toggleChatsButton.setAttribute('aria-label', state.chatsExpanded ? t('collapseChats') : t('expandChats'))
+}
+
+function toggleHeaderBar() {
+  state.headerMinimized = !state.headerMinimized
+  syncHeaderLayout()
+}
+
+function syncHeaderLayout() {
+  if (chatHeader) {
+    chatHeader.dataset.minimized = String(state.headerMinimized)
+  }
+  if (toggleHeaderButton) {
+    const label = state.headerMinimized ? t('restoreTopBar') : t('minimizeTopBar')
+    toggleHeaderButton.setAttribute('aria-label', label)
+    toggleHeaderButton.setAttribute('title', label)
+    toggleHeaderButton.classList.toggle('is-active', state.headerMinimized)
+  }
 }
 
 function toggleDrawerSize() {
@@ -2321,9 +4670,33 @@ function startReminderLoop() {
     window.clearInterval(state.reminderTimer)
   }
 
+  checkDueTasks()
   state.reminderTimer = window.setInterval(() => {
     checkDueTasks()
   }, 30_000)
+}
+
+function syncTaskReminderState(tasks) {
+  const activeTaskIds = new Set()
+  const now = Date.now()
+
+  for (const task of tasks) {
+    if (!task?.taskId) {
+      continue
+    }
+
+    activeTaskIds.add(task.taskId)
+    const dueAt = parseDeliveryDate(task.delivery)
+    if (!dueAt || dueAt.getTime() > now) {
+      state.remindedTaskIds.delete(task.taskId)
+    }
+  }
+
+  for (const taskId of Array.from(state.remindedTaskIds)) {
+    if (!activeTaskIds.has(taskId)) {
+      state.remindedTaskIds.delete(taskId)
+    }
+  }
 }
 
 function checkDueTasks() {
@@ -2352,7 +4725,7 @@ function emitTaskReminder(task) {
     createdAt: new Date().toISOString(),
   })
   renderActivity()
-  statusBox.textContent = t('reminderTriggered', { title: summarizeTitle(task.title, t('newChat')) })
+  setStatusIndicator(t('reminderTriggered', { title: summarizeTitle(task.title, t('newChat')) }), 'warning')
   playReminderChime()
   notifyTask(task)
 }
@@ -2419,6 +4792,29 @@ function openSettingsDrawer(options = {}) {
     window.requestAnimationFrame(() => {
       providersSection?.scrollIntoView({ block: 'start', behavior: 'smooth' })
     })
+  }
+}
+
+function maybeShowFirstRunGuide() {
+  if (!state.settings) {
+    return
+  }
+
+  const hasHistory = (state.settings.sessions?.length ?? 0) > 0
+    || (state.settings.notes?.length ?? 0) > 0
+    || (state.settings.tasks?.length ?? 0) > 0
+
+  try {
+    if (!hasHistory && !window.localStorage.getItem(FIRST_RUN_GUIDE_KEY)) {
+      window.localStorage.setItem(FIRST_RUN_GUIDE_KEY, '1')
+      openSettingsDrawer({ drawerTab: 'general' })
+      setStatusIndicator(t('quickStartCopy'), 'muted')
+    }
+  } catch {
+    if (!hasHistory) {
+      openSettingsDrawer({ drawerTab: 'general' })
+      setStatusIndicator(t('quickStartCopy'), 'muted')
+    }
   }
 }
 

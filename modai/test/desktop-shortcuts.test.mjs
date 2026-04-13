@@ -43,6 +43,20 @@ test('createDesktopShortcut derives a YouTube search from structured desktop fie
   assert.doesNotMatch(action.input.target, /arama/i)
 })
 
+test('createDesktopShortcut ignores structured template labels in English YouTube prompts', () => {
+  const action = createDesktopShortcut([
+    'Task: Open Google Chrome and visit YouTube',
+    'Goal: find Baran Gulesen videos',
+    'Constraints: only use Google Chrome, open it in a new tab',
+    'Completion Criteria: YouTube search results are visible',
+  ].join('\n'))
+
+  assert.equal(action.toolName, 'open')
+  assert.equal(action.input.application, 'Google Chrome')
+  assert.match(action.input.target, /youtube\.com\/results\?search_query=baran%20gulesen/i)
+  assert.doesNotMatch(action.input.target, /Goal%3A|Constraints%3A|Completion%20Criteria/i)
+})
+
 test('createDesktopShortcut opens Finder Downloads instead of deriving a YouTube query', () => {
   const action = createDesktopShortcut([
     'Gorev: Finder ac ve Downloads klasorunu goster',
