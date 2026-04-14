@@ -129,9 +129,12 @@ button {
 }
 
 .shell {
+  --sidebar-width: 196px;
+  --sidebar-width-collapsed: 68px;
+  --sidebar-width-current: var(--sidebar-width);
   position: relative;
   display: grid;
-  grid-template-columns: 196px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width-current) minmax(0, 1fr);
   height: calc(100vh - 1rem);
   overflow: hidden;
   border-radius: 1.1rem;
@@ -141,7 +144,7 @@ button {
 }
 
 .shell[data-sidebar-collapsed="true"] {
-  grid-template-columns: 68px minmax(0, 1fr);
+  --sidebar-width-current: var(--sidebar-width-collapsed);
 }
 
 .sidebar {
@@ -160,7 +163,7 @@ button {
 .sidebar-brand {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.55rem;
   min-width: 0;
   padding-top: 0.1rem;
@@ -188,11 +191,10 @@ button {
 
 .sidebar-toggle,
 .icon-toggle {
-  flex: 0 0 auto;
   width: 2rem;
   height: 2rem;
   padding: 0;
-  border-radius: 0.72rem;
+  border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.032);
   display: inline-flex;
@@ -200,10 +202,32 @@ button {
   justify-content: center;
 }
 
+.sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--sidebar-width-current) - 2.2rem);
+  width: 1.9rem;
+  height: 1.9rem;
+  transform: translateY(-50%);
+  z-index: 12;
+  border-color: rgba(123, 151, 255, 0.22);
+  background:
+    linear-gradient(180deg, rgba(28, 33, 46, 0.96), rgba(17, 21, 29, 0.94)),
+    rgba(17, 21, 29, 0.92);
+  box-shadow: 0 14px 30px rgba(4, 8, 15, 0.28);
+  backdrop-filter: blur(12px);
+}
+
 .sidebar-toggle:hover,
 .icon-toggle:hover {
   border-color: var(--line-strong);
   background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-toggle:hover {
+  background:
+    linear-gradient(180deg, rgba(35, 42, 58, 0.98), rgba(19, 24, 34, 0.94)),
+    rgba(19, 24, 34, 0.94);
 }
 
 .toggle-glyph {
@@ -249,13 +273,14 @@ button {
 }
 
 .shell[data-sidebar-collapsed="true"] .sidebar-brand {
-  flex-direction: column;
+  flex-direction: row;
   justify-content: flex-start;
   width: 100%;
 }
 
 .shell[data-sidebar-collapsed="true"] .sidebar-brand-main {
   justify-content: center;
+  width: 100%;
 }
 
 .shell[data-sidebar-collapsed="true"] .brand-copy,
@@ -1902,6 +1927,7 @@ textarea {
 .sentinel-note strong {
   display: block;
   margin-top: 0.55rem;
+  overflow-wrap: anywhere;
 }
 
 .launch-card p,
@@ -1936,6 +1962,14 @@ textarea {
   gap: 0.85rem;
 }
 
+.billing-setup-head,
+.billing-config-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
 .billing-copy,
 .billing-inline-note {
   margin: 0.55rem 0 0;
@@ -1960,6 +1994,13 @@ textarea {
   margin-top: 0.9rem;
 }
 
+.billing-setup-grid,
+.billing-config-groups {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
 .billing-summary-grid,
 .billing-payment-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1969,20 +2010,75 @@ textarea {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.billing-setup-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .billing-summary-item,
-.billing-payment-grid > div {
+.billing-payment-grid > div,
+.billing-setup-item,
+.billing-config-group {
   display: grid;
   gap: 0.2rem;
   padding: 0.75rem;
   border: 1px solid var(--line);
   border-radius: 0.88rem;
   background: rgba(255, 255, 255, 0.015);
+  min-width: 0;
 }
 
 .billing-summary-item span,
-.billing-payment-grid span {
+.billing-payment-grid span,
+.billing-setup-item span {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.billing-summary-item strong,
+.billing-payment-grid strong {
+  overflow-wrap: anywhere;
+}
+
+.billing-pill-row,
+.billing-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.billing-inline-code {
+  display: block;
+  width: 100%;
+  padding: 0.74rem 0.82rem;
+  border: 1px solid var(--line);
+  border-radius: 0.78rem;
+  background: rgba(0, 0, 0, 0.14);
+  color: var(--text);
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.billing-copy-mini,
+.billing-chip-button {
+  width: fit-content;
+}
+
+.billing-chip-button {
+  padding: 0.44rem 0.62rem;
+  font-size: 0.74rem;
+}
+
+.billing-danger-button {
+  color: var(--danger);
+  border-color: rgba(255, 125, 139, 0.22);
+}
+
+.billing-danger-button:hover {
+  background: rgba(255, 125, 139, 0.08);
+  border-color: rgba(255, 125, 139, 0.28);
 }
 
 .billing-actions {
@@ -2053,6 +2149,7 @@ textarea {
 }
 
 .billing-status-pill.waiting,
+.billing-status-pill.review,
 .billing-status-pill.confirming,
 .billing-status-pill.partially_paid,
 .billing-status-pill.inactive {
@@ -2253,6 +2350,10 @@ textarea {
     display: none;
   }
 
+  .sidebar-toggle {
+    display: none;
+  }
+
   .drawer-mobile-shell {
     display: block;
   }
@@ -2306,7 +2407,8 @@ textarea {
 
   .billing-summary-grid,
   .billing-payment-grid,
-  .billing-rail-grid {
+  .billing-rail-grid,
+  .billing-setup-grid {
     grid-template-columns: 1fr;
   }
 

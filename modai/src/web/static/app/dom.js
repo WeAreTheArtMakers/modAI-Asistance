@@ -31,6 +31,7 @@ export const elements = {
   memorySessionsPanel: document.getElementById('memorySessionsPanel'),
   drawerSessionsPanel: document.getElementById('drawerSessionsPanel'),
   billingPanel: document.getElementById('billingPanel'),
+  operationsPanel: document.getElementById('operationsPanel'),
   memoryNotesPanel: document.getElementById('memoryNotesPanel'),
   scheduledTasksPanel: document.getElementById('scheduledTasksPanel'),
   saveSettingsButton: document.getElementById('saveSettingsButton'),

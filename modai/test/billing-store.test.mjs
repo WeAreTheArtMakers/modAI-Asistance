@@ -88,3 +88,31 @@ test('BillingStore can issue and activate local licenses plus claim crypto licen
   assert.equal(state.activation.planId, 'founder-pass')
   assert.equal(state.activation.source, 'crypto')
 })
+
+test('BillingStore can reset local billing state while preserving the current device', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'modai-billing-reset-'))
+  const configStore = new ConfigStore({ baseDir, fallbackBaseDir: baseDir })
+  const store = new BillingStore(configStore, {
+    now: () => new Date('2026-04-13T11:00:00.000Z'),
+  })
+
+  let state = await store.startTrial({ trialDays: 7, deviceName: 'QA Mac' })
+  state = await store.issueLicense({
+    source: 'crypto',
+    provider: 'cryptomus',
+    planId: 'founder-pass',
+    planLabel: 'Founder Pass',
+    email: 'buyer@example.com',
+    activationLimit: 5,
+    orderId: 'order-2',
+  })
+
+  state = await store.resetLocalState()
+
+  assert.equal(state.device.name, 'QA Mac')
+  assert.equal(state.trial, null)
+  assert.equal(state.activation, null)
+  assert.deepEqual(state.licenses, [])
+  assert.deepEqual(state.payments, [])
+  assert.deepEqual(state.webhookEvents, [])
+})

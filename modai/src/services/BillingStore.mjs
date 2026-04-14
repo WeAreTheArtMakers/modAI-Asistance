@@ -52,6 +52,19 @@ export class BillingStore {
     return this.save(next)
   }
 
+  async resetLocalState({ preserveDevice = true } = {}) {
+    return this.update(current => {
+      const initial = this.createInitialState()
+      if (preserveDevice !== false && current?.device) {
+        initial.device = {
+          ...initial.device,
+          ...current.device,
+        }
+      }
+      return initial
+    })
+  }
+
   async startTrial({ trialDays = 7, deviceName = '' } = {}) {
     const trialLength = Math.max(1, Number(trialDays) || 7)
     const now = this.now()
@@ -96,6 +109,14 @@ export class BillingStore {
         orderId && license.orderId === orderId && license.source === source,
       )
       if (existing) {
+        existing.provider = provider || existing.provider
+        existing.planId = planId || existing.planId
+        existing.planLabel = planLabel || existing.planLabel
+        existing.email = email.trim() || existing.email
+        existing.activationLimit = Math.max(1, Number(activationLimit) || existing.activationLimit || 1)
+        existing.expiresAt = expiresAt ?? existing.expiresAt
+        existing.status = 'active'
+        existing.metadata = { ...(existing.metadata ?? {}), ...(metadata ?? {}) }
         return current
       }
 
@@ -278,11 +299,23 @@ export class BillingStore {
           priceCurrency: String(payment.priceCurrency ?? 'usd'),
           payAddress: String(payment.payAddress ?? ''),
           payUrl: String(payment.payUrl ?? ''),
+          paymentKind: String(payment.paymentKind ?? ''),
+          checkoutSessionId: String(payment.checkoutSessionId ?? ''),
+          checkoutStatus: String(payment.checkoutStatus ?? ''),
+          subscriptionId: String(payment.subscriptionId ?? ''),
+          subscriptionStatus: String(payment.subscriptionStatus ?? ''),
+          currentPeriodEnd: payment.currentPeriodEnd ?? null,
           payerAddress: String(payment.payerAddress ?? '').trim(),
+          payerName: String(payment.payerName ?? '').trim(),
           cryptoNetwork: String(payment.cryptoNetwork ?? ''),
           cryptoNetworkLabel: String(payment.cryptoNetworkLabel ?? ''),
           cryptoAsset: String(payment.cryptoAsset ?? ''),
           cryptoAssetLabel: String(payment.cryptoAssetLabel ?? ''),
+          recipientName: String(payment.recipientName ?? ''),
+          recipientBankName: String(payment.recipientBankName ?? ''),
+          bankSwift: String(payment.bankSwift ?? ''),
+          bankFastAlias: String(payment.bankFastAlias ?? ''),
+          paymentReference: String(payment.paymentReference ?? ''),
           tokenAddress: String(payment.tokenAddress ?? ''),
           assetKind: String(payment.assetKind ?? ''),
           assetDecimals: Number(payment.assetDecimals ?? 0) || 0,
@@ -318,9 +351,23 @@ export class BillingStore {
 
       Object.assign(payment, {
         status: String(update.paymentStatus ?? payment.status),
+        email: String(update.email ?? payment.email).trim(),
         payAmount: String(update.payAmount ?? payment.payAmount),
         payAddress: String(update.payAddress ?? payment.payAddress),
+        payUrl: String(update.payUrl ?? payment.payUrl),
+        paymentKind: String(update.paymentKind ?? payment.paymentKind ?? ''),
+        checkoutSessionId: String(update.checkoutSessionId ?? payment.checkoutSessionId ?? ''),
+        checkoutStatus: String(update.checkoutStatus ?? payment.checkoutStatus ?? ''),
+        subscriptionId: String(update.subscriptionId ?? payment.subscriptionId ?? ''),
+        subscriptionStatus: String(update.subscriptionStatus ?? payment.subscriptionStatus ?? ''),
+        currentPeriodEnd: update.currentPeriodEnd ?? payment.currentPeriodEnd ?? null,
         payerAddress: String(update.payerAddress ?? payment.payerAddress),
+        payerName: String(update.payerName ?? payment.payerName).trim(),
+        recipientName: String(update.recipientName ?? payment.recipientName),
+        recipientBankName: String(update.recipientBankName ?? payment.recipientBankName),
+        bankSwift: String(update.bankSwift ?? payment.bankSwift),
+        bankFastAlias: String(update.bankFastAlias ?? payment.bankFastAlias),
+        paymentReference: String(update.paymentReference ?? payment.paymentReference),
         actuallyPaid: String(update.actuallyPaid ?? payment.actuallyPaid),
         txHash: String(update.txHash ?? payment.txHash),
         purchaseId: String(update.purchaseId ?? payment.purchaseId),
@@ -343,7 +390,7 @@ export class BillingStore {
           createdAt: this.now().toISOString(),
           expiresAt: issueOptions.expiresAt ?? null,
           status: 'active',
-          orderId: payment.orderId,
+          orderId: String(issueOptions.orderId ?? payment.orderId),
           activations: [],
           metadata: {
             providerPaymentId: payment.providerPaymentId,
@@ -477,11 +524,23 @@ export class BillingStore {
         priceCurrency: String(payment.priceCurrency ?? 'usd'),
         payAddress: String(payment.payAddress ?? ''),
         payUrl: String(payment.payUrl ?? ''),
+        paymentKind: String(payment.paymentKind ?? ''),
+        checkoutSessionId: String(payment.checkoutSessionId ?? ''),
+        checkoutStatus: String(payment.checkoutStatus ?? ''),
+        subscriptionId: String(payment.subscriptionId ?? ''),
+        subscriptionStatus: String(payment.subscriptionStatus ?? ''),
+        currentPeriodEnd: payment.currentPeriodEnd ?? null,
         payerAddress: String(payment.payerAddress ?? '').trim(),
+        payerName: String(payment.payerName ?? '').trim(),
         cryptoNetwork: String(payment.cryptoNetwork ?? ''),
         cryptoNetworkLabel: String(payment.cryptoNetworkLabel ?? ''),
         cryptoAsset: String(payment.cryptoAsset ?? ''),
         cryptoAssetLabel: String(payment.cryptoAssetLabel ?? ''),
+        recipientName: String(payment.recipientName ?? ''),
+        recipientBankName: String(payment.recipientBankName ?? ''),
+        bankSwift: String(payment.bankSwift ?? ''),
+        bankFastAlias: String(payment.bankFastAlias ?? ''),
+        paymentReference: String(payment.paymentReference ?? ''),
         tokenAddress: String(payment.tokenAddress ?? ''),
         assetKind: String(payment.assetKind ?? ''),
         assetDecimals: Number(payment.assetDecimals ?? 0) || 0,
@@ -570,7 +629,15 @@ export function buildBillingClientState(state, { catalog, environment, now }) {
         label: plan.label,
         amountUsd: plan.amountUsd,
         intervalLabel: plan.intervalLabel,
-        available: Boolean(plan.checkoutUrl),
+        checkoutProvider: plan.checkoutProvider ?? '',
+        available: Boolean(plan.checkoutUrl || plan.checkoutProvider),
+      })),
+      bank: (catalog?.bankPlans ?? []).map(plan => ({
+        id: plan.id,
+        label: plan.label,
+        amountUsd: plan.amountUsd,
+        intervalLabel: plan.intervalLabel,
+        available: environment?.bank?.configured === true,
       })),
       crypto: (catalog?.cryptoPlans ?? []).map(plan => ({
         id: plan.id,
@@ -602,11 +669,23 @@ export function buildBillingClientState(state, { catalog, environment, now }) {
       priceCurrency: payment.priceCurrency,
       payAddress: payment.payAddress,
       payUrl: payment.payUrl,
+      paymentKind: payment.paymentKind,
+      checkoutSessionId: payment.checkoutSessionId,
+      checkoutStatus: payment.checkoutStatus,
+      subscriptionId: payment.subscriptionId,
+      subscriptionStatus: payment.subscriptionStatus,
+      currentPeriodEnd: payment.currentPeriodEnd,
       payerAddress: payment.payerAddress,
+      payerName: payment.payerName,
       cryptoNetwork: payment.cryptoNetwork,
       cryptoNetworkLabel: payment.cryptoNetworkLabel,
       cryptoAsset: payment.cryptoAsset,
       cryptoAssetLabel: payment.cryptoAssetLabel,
+      recipientName: payment.recipientName,
+      recipientBankName: payment.recipientBankName,
+      bankSwift: payment.bankSwift,
+      bankFastAlias: payment.bankFastAlias,
+      paymentReference: payment.paymentReference,
       quoteExpiresAt: payment.quoteExpiresAt,
       confirmationsRequired: payment.confirmationsRequired,
       explorerUrl: payment.explorerUrl,

@@ -17,6 +17,8 @@ use tauri::{image::Image, Manager, WebviewUrl, WebviewWindowBuilder};
 struct ServerState(Mutex<Option<Child>>);
 
 fn main() {
+    install_panic_hook();
+
     let app = tauri::Builder::default()
         .setup(|app| {
             let runtime_dir = resolve_runtime_dir(app.handle())?;
@@ -124,7 +126,7 @@ fn ensure_server_running(runtime_dir: &Path, port: u16) -> Result<Option<Child>,
     }
 
     let node_bin = find_node_binary()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Node.js 20+ not found on PATH"))?;
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Node.js 22+ not found on PATH"))?;
     let state_dir = resolve_state_dir(runtime_dir)?;
     let workspace_dir = resolve_workspace_dir(runtime_dir);
     let server_entry = runtime_dir.join("modai").join("src").join("web").join("server.mjs");
@@ -138,6 +140,7 @@ fn ensure_server_running(runtime_dir: &Path, port: u16) -> Result<Option<Child>,
         .arg(port.to_string())
         .current_dir(&workspace_dir)
         .env("MODAI_PARENT_PID", std::process::id().to_string())
+        .env("MODAI_WEB_PORT", port.to_string())
         .env("MODAI_WORKSPACE_DIR", &workspace_dir)
         .env("MODAI_RUNTIME_DIR", runtime_dir)
         .env("PATH", resolve_path_env())
@@ -160,6 +163,43 @@ fn resolve_state_dir(runtime_dir: &Path) -> Result<PathBuf, Box<dyn Error>> {
 
     fs::create_dir_all(&state_dir)?;
     Ok(state_dir)
+}
+
+fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        if let Some(crash_log) = resolve_crash_log_path() {
+            if let Some(parent) = crash_log.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+
+            if let Ok(mut file) = File::options().create(true).append(true).open(crash_log) {
+                let _ = writeln!(
+                    file,
+                    "[{}] {}",
+                    chrono_like_timestamp(),
+                    panic_info
+                );
+            }
+        }
+
+        previous(panic_info);
+    }));
+}
+
+fn resolve_crash_log_path() -> Option<PathBuf> {
+    if let Some(custom) = env::var_os("MODAI_HOME") {
+        return Some(PathBuf::from(custom).join("crash.log"));
+    }
+
+    env::var_os("HOME").map(|home| PathBuf::from(home).join(".modai").join("crash.log"))
+}
+
+fn chrono_like_timestamp() -> String {
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => format!("{}", duration.as_secs()),
+        Err(_) => "0".to_string(),
+    }
 }
 
 fn resolve_workspace_dir(runtime_dir: &Path) -> PathBuf {

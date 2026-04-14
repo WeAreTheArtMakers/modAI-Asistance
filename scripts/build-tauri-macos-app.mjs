@@ -1,5 +1,6 @@
 import { chmod, cp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -12,9 +13,15 @@ const macOsDir = join(contentsDir, 'MacOS')
 const resourcesDir = join(contentsDir, 'Resources')
 const runtimeDir = join(resourcesDir, 'runtime')
 const cargoHomeDir = process.env.CARGO_HOME || join(process.env.HOME ?? rootDir, '.cargo')
-const binarySource = join(rootDir, 'src-tauri', 'target', 'release', 'modai-tauri')
+const cargoExecutable = resolveCargoExecutable(cargoHomeDir)
+const requestedTarget = readRequestedTarget()
+const artifactArch = mapMacArtifactArch(requestedTarget || process.arch)
+const cargoTargetDir = requestedTarget
+  ? join(rootDir, 'src-tauri', 'target', requestedTarget, 'release')
+  : join(rootDir, 'src-tauri', 'target', 'release')
+const binarySource = join(cargoTargetDir, 'modai-tauri')
 const binaryTarget = join(macOsDir, 'modAI')
-const zipPath = join(distDir, `modAI-tauri-macos-${process.arch}.zip`)
+const zipPath = join(distDir, `modAI-tauri-macos-${artifactArch}.zip`)
 const infoPlistPath = join(contentsDir, 'Info.plist')
 const readmePath = join(resourcesDir, 'README.txt')
 const iconIcnsSource = join(rootDir, 'src-tauri', 'icons', 'modAI.icns')
@@ -48,7 +55,7 @@ const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `
 
-const readme = `modAI Tauri build for macOS ${process.arch}
+const readme = `modAI Tauri build for macOS ${artifactArch}
 
 What is bundled
 - Native Tauri window shell
@@ -76,7 +83,12 @@ execFileSync('node', [join(rootDir, 'scripts', 'generate-brand-assets.mjs')], {
   stdio: 'inherit',
 })
 
-execFileSync('cargo', ['build', '--release', '--manifest-path', join(rootDir, 'src-tauri', 'Cargo.toml')], {
+const cargoArgs = ['build', '--release', '--manifest-path', join(rootDir, 'src-tauri', 'Cargo.toml')]
+if (requestedTarget) {
+  cargoArgs.push('--target', requestedTarget)
+}
+
+execFileSync(cargoExecutable, cargoArgs, {
   cwd: rootDir,
   stdio: 'inherit',
   env: buildCargoEnv(cargoHomeDir),
@@ -128,10 +140,38 @@ function buildCargoEnv(cargoHome) {
     ...process.env,
     CARGO_HOME: cargoHome,
   }
+  const cargoBinDir = join(cargoHome, 'bin')
+  if (existsSync(cargoBinDir)) {
+    envVars.PATH = `${cargoBinDir}:${process.env.PATH ?? ''}`
+  }
 
   if (process.env.MODAI_CARGO_NET_OFFLINE !== 'false') {
     envVars.CARGO_NET_OFFLINE = 'true'
   }
 
   return envVars
+}
+
+function resolveCargoExecutable(cargoHome) {
+  const cargoBin = join(cargoHome, 'bin', 'cargo')
+  return existsSync(cargoBin) ? cargoBin : 'cargo'
+}
+
+function readRequestedTarget() {
+  const targetFlagIndex = process.argv.indexOf('--target')
+  if (targetFlagIndex >= 0) {
+    return String(process.argv[targetFlagIndex + 1] ?? '').trim()
+  }
+  return String(process.env.MODAI_CARGO_TARGET ?? '').trim()
+}
+
+function mapMacArtifactArch(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === 'aarch64-apple-darwin' || normalized === 'arm64') {
+    return 'arm64'
+  }
+  if (normalized === 'x86_64-apple-darwin' || normalized === 'x64') {
+    return 'x64'
+  }
+  return process.arch
 }

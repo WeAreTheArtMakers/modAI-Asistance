@@ -38,6 +38,7 @@ export function createInitialState() {
       licenseKey: '',
       deviceName: '',
       cardPlanId: 'starter-monthly',
+      bankPlanId: 'pro-annual',
       cryptoPlanId: 'pro-annual',
       cryptoCurrency: 'usdc',
       networkId: 'solana',

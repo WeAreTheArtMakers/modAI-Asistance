@@ -24,6 +24,7 @@ import {
   renderAdvancedProviderPanel,
   renderBillingPanelMarkup,
   renderNoteCardMarkup,
+  renderOperationsPanelMarkup,
   renderProviderCardMarkup,
   renderSessionCardMarkup,
   renderTaskCardMarkup,
@@ -62,6 +63,7 @@ const {
   memorySessionsPanel,
   drawerSessionsPanel,
   billingPanel,
+  operationsPanel,
   memoryNotesPanel,
   scheduledTasksPanel,
   saveSettingsButton,
@@ -154,6 +156,7 @@ const {
 const state = createInitialState()
 let confirmDialogResolve = null
 let taskEditorResolve = null
+let billingRefreshTimer = null
 const FIRST_RUN_GUIDE_KEY = 'modai-first-run-guide-v1'
 const MCP_PRESETS = {
   github: {
@@ -218,7 +221,7 @@ const I18N = {
     guideGatekeeperTitle: 'Allow the first launch',
     guideGatekeeperBody: 'If macOS blocks the app, use Open Anyway or keep Sentinel nearby as an optional Gatekeeper utility.',
     guidePaymentTitle: 'Choose payment and activation',
-    guidePaymentBody: 'The launch page should handle trial, card checkout, crypto checkout, and license delivery in one flow.',
+    guidePaymentBody: 'The launch page should handle trial, hosted checkout, crypto checkout, and license delivery in one flow.',
     guideProviderTitle: 'Connect a model provider',
     guideProviderBody: 'Start with Ollama for local use, then add Gemini or Anthropic only when you need cloud reasoning.',
     guideWorkflowTitle: 'Run a workflow pack',
@@ -226,7 +229,7 @@ const I18N = {
     openLaunchSite: 'Open launch site',
     openProviderSetup: 'Open provider setup',
     openSentinel: 'Open Sentinel',
-    billingCardLabel: 'Card billing',
+    billingCardLabel: 'Hosted billing',
     billingCardTitle: 'Keep recurring plans simple',
     billingCardBody: 'Use a merchant-of-record flow for monthly and yearly plans so tax, invoicing, and failed payment recovery stay out of the app binary.',
     billingCryptoLabel: 'Stablecoin checkout',
@@ -238,6 +241,30 @@ const I18N = {
     billingStatusTitle: 'Trial and Activation',
     billingActivateTitle: 'Start trial or activate',
     billingActivateCopy: 'A new user should be able to start the trial, paste a license key, or continue from a completed payment without leaving the app.',
+    billingManageLicenseTitle: 'Manage current activation',
+    billingManageLicenseCopy: 'This device already has an active license. Use this form only if you want to replace the key, switch the email, or activate a different purchase.',
+    billingSetupTitle: 'Billing setup',
+    billingSetupCopy: 'The desktop app reads these runtime.env files on launch. Add payment keys there, then restart modAI.',
+    billingSetupHomeFile: 'User runtime env',
+    billingSetupRuntimeFile: 'Bundled runtime env',
+    billingSetupCopyPath: 'Copy path',
+    billingSetupRestart: 'Restart the desktop app after editing runtime.env so the new payment configuration is loaded.',
+    billingSetupCryptomusTitle: 'Cryptomus',
+    billingSetupCryptomusHint: 'Use the Cryptomus Merchant ID here, not the website username. Cryptomus documents verify webhooks with the API payment key, so CRYPTOMUS_WEBHOOK_SECRET can match the same value. Add a public webhook base URL if you want automatic remote confirmation.',
+    billingSetupHostedTitle: 'Hosted checkout',
+    billingSetupHostedHint: 'Set per-plan hosted URLs here. The checkout label shown in the UI uses {provider}.',
+    billingSetupBankTitle: 'IBAN / FAST',
+    billingSetupBankHint: 'Configure bank recipient details, FX rate, and transfer reference prefix so the app can create manual bank invoices.',
+    billingSetupReady: 'ready',
+    billingSetupMissing: 'missing',
+    billingSetupCryptomusShort: 'Cryptomus',
+    billingSetupHostedShort: 'Hosted',
+    billingSetupBankShort: 'IBAN',
+    billingResetLocal: 'Reset local billing state',
+    billingResetLocalHint: 'Use this only for QA or launch testing. It clears local trial, activation, payment, and webhook state on this device.',
+    billingResetLocalConfirmTitle: 'Reset local billing state?',
+    billingResetLocalConfirmBody: 'This will remove the local trial, activation, payments, and webhook history stored on this device. Remote purchases are not canceled.',
+    billingResetLocalDone: 'Local billing state cleared',
     billingDeviceLabel: 'Device',
     billingEmailLabel: 'Email',
     billingPlanLabel: 'Plan',
@@ -245,12 +272,19 @@ const I18N = {
     billingLicenseKeyLabel: 'License key',
     billingStartTrial: 'Start 7-day trial',
     billingActivateButton: 'Activate license',
-    billingCardRailTitle: 'Card checkout',
-    billingCardRailCopy: 'Use Lemon Squeezy for recurring card billing and instant license delivery on one-time plans.',
-    billingCardSetupNeeded: 'Add Lemon Squeezy checkout URLs to enable card purchases.',
+    billingCardRailTitle: 'Hosted checkout',
+    billingCardRailCopy: 'Open an external checkout page for card or merchant-hosted purchases when you do not want checkout inside the app.',
+    billingCardSetupNeeded: 'Add the MODAI_HOSTED_*_URL values in runtime.env to enable hosted purchases.',
+    billingBankRailTitle: 'IBAN / FAST transfer',
+    billingBankRailCopy: 'Create a bank transfer invoice with a unique reference for manual review when you cannot use card rails.',
+    billingBankModeManual: 'This flow is manual by design. The buyer sends the exact amount with the provided reference, then the seller approves the payment after checking the bank statement.',
+    billingBankPlanTitle: 'Transfer plan',
+    billingCreateBankPayment: 'Create bank invoice',
+    billingBankSetupNeeded: 'Add the MODAI_BANK_* fields and TRY quote rate in runtime.env to enable IBAN / FAST checkout.',
     billingCryptoRailTitle: 'USDC / USDT checkout',
     billingCryptoRailCopy: 'Create a crypto invoice, watch the payment state, and claim the issued license on this device.',
     billingCryptoModeLive: 'Live direct-wallet checkout is enabled. Send the exact quoted amount and verify the on-chain transfer to issue the license.',
+    billingCryptoModeProcessor: 'Cryptomus checkout is enabled. modAI will open the hosted invoice, track payment status, and issue the license after webhook or refresh confirmation.',
     billingCryptoModeSandbox: 'Crypto checkout is still in local test mode. Configure live rails before selling the app.',
     billingCryptoPlanTitle: 'Crypto plan',
     billingCryptoCurrencyLabel: 'Stablecoin',
@@ -280,11 +314,16 @@ const I18N = {
     billingStepVerifyBody: 'After the transfer is confirmed on-chain, paste the transaction hash and verify the payment.',
     billingCopyAmount: 'Copy amount',
     billingCopyAddress: 'Copy address',
+    billingCopyIban: 'Copy IBAN',
+    billingCopyReference: 'Copy reference',
     billingCopied: 'Copied to clipboard',
+    billingRecipientLabel: 'Recipient',
+    billingBankNameLabel: 'Bank',
+    billingFastAliasLabel: 'FAST / SWIFT',
     billingTxHashLabel: 'Transaction hash',
     billingTxHashPlaceholder: 'Paste the on-chain transaction hash',
     billingTxHashHint: 'Professional flow: create the invoice, send the exact quoted amount, then paste the transaction hash for verification.',
-    billingTxHashHintWaiting: 'This invoice is waiting for a real on-chain payment. Send the exact quoted amount, then paste the transaction hash below.',
+    billingTxHashHintWaiting: 'This invoice is waiting for a real on-chain payment. If the payer wallet is filled in, modAI can auto-check recent transfers; you can still paste the transaction hash below.',
     billingTxHashRequired: 'Transaction hash is required.',
     billingVerifyTransfer: 'Verify transfer',
     billingVerifyingTransfer: 'Verifying transfer...',
@@ -313,6 +352,39 @@ const I18N = {
     billingClaimingLicense: 'Applying license...',
     billingClaimed: 'License applied',
     billingOpeningCheckout: 'Opening checkout...',
+    billingOpenCheckout: 'Open secure checkout',
+    billingCardPaymentHint: 'Finish payment in the secure checkout page, then return here. modAI can refresh the session and apply the license once payment is captured.',
+    billingCardStatusLabel: 'Checkout state',
+    billingCryptomusHint: 'Complete the payment on the Cryptomus invoice page, then return here and refresh if the webhook has not arrived yet.',
+    billingOpenCryptomus: 'Open Cryptomus invoice',
+    billingMarkBankSent: 'I sent the transfer',
+    billingApproveManually: 'Approve manually',
+    billingBankWaitingHint: 'Send the exact quoted amount to the IBAN above, keep the reference intact, then mark the transfer as sent.',
+    billingBankReviewHint: 'The transfer was marked as sent. A seller review is required before modAI issues the license.',
+    billingBankFinishedHint: 'The bank transfer has been approved and the license can now be claimed on this device.',
+    billingStatusReviewPayment: 'under review',
+    billingStatusConfirmingPayment: 'payment processing',
+    operationsTitle: 'App Operations',
+    operationsCopy: 'Check the release channel, download the preferred desktop build, and keep local diagnostics available when something fails.',
+    updateTitle: 'Desktop updates',
+    updateCopy: 'modAI prefers the native Tauri build for shipping. Check the latest release and download the right asset for this machine.',
+    updateCurrentVersionLabel: 'Current version',
+    updateLatestVersionLabel: 'Latest release',
+    updateAvailableLabel: 'Update available: {version}',
+    updateCurrentLabel: 'Current build is up to date',
+    updateUnknownLabel: 'Update status not checked yet',
+    checkForUpdates: 'Check for updates',
+    downloadUpdate: 'Download update',
+    download: 'Download',
+    telemetryTitle: 'Crash and telemetry',
+    telemetryCopy: 'Frontend errors, server failures, and crash breadcrumbs are written locally. Add a remote sink later if you want centralized diagnostics.',
+    telemetryEventsLabel: 'Local events',
+    telemetryLastEventLabel: 'Last event',
+    telemetryCrashLabel: 'Crash log',
+    telemetryLogLabel: 'Telemetry log',
+    telemetryRemoteReady: 'Remote sink configured',
+    telemetryLocalOnly: 'Local diagnostics only',
+    updateCheckRunning: 'Checking for updates...',
     sentinelNoteTitle: 'Gatekeeper support note',
     sentinelNoteBody: 'For advanced users who want clearer Gatekeeper visibility, recommend Sentinel as an optional companion utility in the support flow, not a requirement.',
     workflowPacksTitle: 'Workflow Packs',
@@ -649,7 +721,7 @@ const I18N = {
     guideGatekeeperTitle: 'İlk açılışı onayla',
     guideGatekeeperBody: 'macOS uygulamayı engellerse Open Anyway kullan veya opsiyonel Gatekeeper yardımcısı olarak Sentinel’i elinde tut.',
     guidePaymentTitle: 'Ödeme ve aktivasyonu seç',
-    guidePaymentBody: 'Lansman sayfası trial, kart ödemesi, kripto ödemesi ve lisans teslimini tek akışta çözmeli.',
+    guidePaymentBody: 'Lansman sayfası trial, hosted checkout, kripto ödemesi ve lisans teslimini tek akışta çözmeli.',
     guideProviderTitle: 'Bir model provider bağla',
     guideProviderBody: 'Yerel kullanım için Ollama ile başla, daha güçlü cloud akıl yürütmesi gerektiğinde Gemini veya Anthropic ekle.',
     guideWorkflowTitle: 'Bir workflow pack çalıştır',
@@ -657,7 +729,7 @@ const I18N = {
     openLaunchSite: 'Lansman sitesini aç',
     openProviderSetup: 'Provider ayarlarını aç',
     openSentinel: 'Sentinel aç',
-    billingCardLabel: 'Kart ile ödeme',
+    billingCardLabel: 'Hosted ödeme',
     billingCardTitle: 'Tekrarlayan planları sade tut',
     billingCardBody: 'Aylık ve yıllık planlar için merchant-of-record akışı kullan; vergi, fatura ve başarısız ödeme toparlama uygulama binary’sinin dışında kalsın.',
     billingCryptoLabel: 'Stablecoin ödeme',
@@ -669,6 +741,30 @@ const I18N = {
     billingStatusTitle: 'Trial ve Aktivasyon',
     billingActivateTitle: 'Trial başlat veya lisans aktive et',
     billingActivateCopy: 'Yeni kullanıcı uygulamadan çıkmadan trial başlatabilmeli, lisans anahtarını yapıştırabilmeli veya tamamlanan ödemeden devam edebilmelidir.',
+    billingManageLicenseTitle: 'Mevcut aktivasyonu yönet',
+    billingManageLicenseCopy: 'Bu cihazda zaten aktif lisans var. Bu formu yalnızca anahtarı değiştirmek, e-postayı güncellemek veya farklı bir satın alımı aktive etmek için kullan.',
+    billingSetupTitle: 'Ödeme kurulumu',
+    billingSetupCopy: 'Masaüstü uygulaması açılırken bu runtime.env dosyalarını okur. Ödeme anahtarlarını buraya ekle, sonra modAI uygulamasını yeniden başlat.',
+    billingSetupHomeFile: 'Kullanıcı runtime env',
+    billingSetupRuntimeFile: 'Paket runtime env',
+    billingSetupCopyPath: 'Yolu kopyala',
+    billingSetupRestart: 'Yeni ödeme yapılandırmasının yüklenmesi için runtime.env düzenledikten sonra masaüstü uygulamasını yeniden başlat.',
+    billingSetupCryptomusTitle: 'Cryptomus',
+    billingSetupCryptomusHint: 'Burada Cryptomus Merchant ID kullanılmalı, hesap kullanıcı adı değil. Cryptomus dokümanında webhook doğrulaması API payment key ile yapılıyor; bu yüzden CRYPTOMUS_WEBHOOK_SECRET aynı değer olabilir. Otomatik uzaktan onay istiyorsan public webhook base URL de ekle.',
+    billingSetupHostedTitle: 'Hosted checkout',
+    billingSetupHostedHint: 'Plan bazlı hosted URL’leri burada tanımla. Arayüzde görünen checkout etiketi {provider} olur.',
+    billingSetupBankTitle: 'IBAN / FAST',
+    billingSetupBankHint: 'Uygulama manuel banka invoice’u üretebilsin diye alıcı banka bilgilerini, FX kurunu ve transfer referans prefix’ini tanımla.',
+    billingSetupReady: 'hazır',
+    billingSetupMissing: 'eksik',
+    billingSetupCryptomusShort: 'Cryptomus',
+    billingSetupHostedShort: 'Hosted',
+    billingSetupBankShort: 'IBAN',
+    billingResetLocal: 'Yerel ödeme durumunu sıfırla',
+    billingResetLocalHint: 'Bunu yalnızca QA veya lansman testi için kullan. Bu cihazdaki yerel trial, aktivasyon, ödeme ve webhook durumunu temizler.',
+    billingResetLocalConfirmTitle: 'Yerel ödeme durumu sıfırlansın mı?',
+    billingResetLocalConfirmBody: 'Bu işlem bu cihazda tutulan trial, aktivasyon, ödeme ve webhook geçmişini siler. Uzak satın alımlar iptal edilmez.',
+    billingResetLocalDone: 'Yerel ödeme durumu temizlendi',
     billingDeviceLabel: 'Cihaz',
     billingEmailLabel: 'E-posta',
     billingPlanLabel: 'Plan',
@@ -676,12 +772,19 @@ const I18N = {
     billingLicenseKeyLabel: 'Lisans anahtarı',
     billingStartTrial: '7 günlük trial başlat',
     billingActivateButton: 'Lisansı aktive et',
-    billingCardRailTitle: 'Kart ile ödeme',
-    billingCardRailCopy: 'Tekrarlayan kart ödemeleri ve tek seferlik planlarda anında lisans teslimi için Lemon Squeezy kullan.',
-    billingCardSetupNeeded: 'Kart satın alımını açmak için Lemon Squeezy checkout URL’lerini ekle.',
+    billingCardRailTitle: 'Hosted checkout',
+    billingCardRailCopy: 'Ödemeyi uygulama dışında açmak istediğinde kart veya merchant-hosted satın alma sayfası aç.',
+    billingCardSetupNeeded: 'Hosted satın alımı açmak için runtime.env içine MODAI_HOSTED_*_URL alanlarını ekle.',
+    billingBankRailTitle: 'IBAN / FAST transfer',
+    billingBankRailCopy: 'Kart rayı kullanılamadığında benzersiz referanslı banka transfer invoice’u oluştur.',
+    billingBankModeManual: 'Bu akış tasarım gereği manueldir. Alıcı tam tutarı verilen referansla yollar, satıcı banka hareketini kontrol ettikten sonra ödemeyi onaylar.',
+    billingBankPlanTitle: 'Transfer planı',
+    billingCreateBankPayment: 'Banka invoice oluştur',
+    billingBankSetupNeeded: 'IBAN / FAST checkout açmak için runtime.env içine MODAI_BANK_* alanlarını ve TRY quote kurunu ekle.',
     billingCryptoRailTitle: 'USDC / USDT ödeme',
     billingCryptoRailCopy: 'Kripto ödeme oluştur, ödeme durumunu izle ve üretilen lisansı bu cihaza uygula.',
     billingCryptoModeLive: 'Canlı direct-wallet checkout açık. Tam quoted tutarı gönder ve lisansı üretmek için zincir üstü transferi doğrula.',
+    billingCryptoModeProcessor: 'Cryptomus checkout açık. modAI hosted invoice sayfasını açar, ödeme durumunu takip eder ve webhook veya yenileme onayından sonra lisansı üretir.',
     billingCryptoModeSandbox: 'Kripto checkout hâlâ yerel test modunda. Uygulamayı satışa çıkarmadan önce canlı ödeme raylarını bağla.',
     billingCryptoPlanTitle: 'Kripto planı',
     billingCryptoCurrencyLabel: 'Stablecoin',
@@ -711,11 +814,16 @@ const I18N = {
     billingStepVerifyBody: 'Transfer zincirde onaylandıktan sonra işlem hash’ini yapıştır ve ödemeyi doğrula.',
     billingCopyAmount: 'Tutarı kopyala',
     billingCopyAddress: 'Adresi kopyala',
+    billingCopyIban: 'IBAN kopyala',
+    billingCopyReference: 'Referansı kopyala',
     billingCopied: 'Panoya kopyalandı',
+    billingRecipientLabel: 'Alıcı',
+    billingBankNameLabel: 'Banka',
+    billingFastAliasLabel: 'FAST / SWIFT',
     billingTxHashLabel: 'İşlem hash’i',
     billingTxHashPlaceholder: 'Zincir üzerindeki işlem hash’ini yapıştır',
     billingTxHashHint: 'Profesyonel akış: invoice oluştur, tam quoted tutarı gönder, sonra doğrulama için işlem hash’ini yapıştır.',
-    billingTxHashHintWaiting: 'Bu invoice gerçek zincir ödemesini bekliyor. Tam quoted tutarı gönder, sonra aşağıya işlem hash’ini yapıştır.',
+    billingTxHashHintWaiting: 'Bu invoice gerçek zincir ödemesini bekliyor. Gönderen cüzdan alanı doluysa modAI son transferleri otomatik kontrol edebilir; yine de aşağıya işlem hash’ini yapıştırabilirsin.',
     billingTxHashRequired: 'İşlem hash’i gerekli.',
     billingVerifyTransfer: 'Transferi doğrula',
     billingVerifyingTransfer: 'Transfer doğrulanıyor...',
@@ -744,6 +852,39 @@ const I18N = {
     billingClaimingLicense: 'Lisans uygulanıyor...',
     billingClaimed: 'Lisans uygulandı',
     billingOpeningCheckout: 'Checkout açılıyor...',
+    billingOpenCheckout: 'Güvenli checkout aç',
+    billingCardPaymentHint: 'Ödemeyi güvenli checkout sayfasında tamamla, sonra buraya dön. modAI oturumu yenileyip ödeme alındığında lisansı uygulayabilir.',
+    billingCardStatusLabel: 'Checkout durumu',
+    billingCryptomusHint: 'Ödemeyi Cryptomus invoice sayfasında tamamla, webhook henüz gelmediyse buraya dönüp durumu yenile.',
+    billingOpenCryptomus: 'Cryptomus invoice aç',
+    billingMarkBankSent: 'Transferi gönderdim',
+    billingApproveManually: 'Manuel onayla',
+    billingBankWaitingHint: 'Yukarıdaki IBAN’a tam quoted tutarı gönder, referansı bozma, sonra transferi gönderildi olarak işaretle.',
+    billingBankReviewHint: 'Transfer gönderildi olarak işaretlendi. modAI lisans üretmeden önce satıcı incelemesi gerekir.',
+    billingBankFinishedHint: 'Banka transferi onaylandı; lisans artık bu cihazda claim edilebilir.',
+    billingStatusReviewPayment: 'incelemede',
+    billingStatusConfirmingPayment: 'ödeme işleniyor',
+    operationsTitle: 'Uygulama Operasyonları',
+    operationsCopy: 'Release kanalını kontrol et, bu cihaz için doğru desktop build’ini indir ve bir sorun olduğunda yerel teşhis kayıtlarını hazır tut.',
+    updateTitle: 'Desktop güncellemeleri',
+    updateCopy: 'modAI dağıtım için native Tauri build’ini tercih eder. Son release’i kontrol et ve bu makine için doğru asset’i indir.',
+    updateCurrentVersionLabel: 'Mevcut sürüm',
+    updateLatestVersionLabel: 'Son release',
+    updateAvailableLabel: 'Güncelleme var: {version}',
+    updateCurrentLabel: 'Mevcut build güncel',
+    updateUnknownLabel: 'Güncelleme durumu henüz kontrol edilmedi',
+    checkForUpdates: 'Güncellemeleri kontrol et',
+    downloadUpdate: 'Güncellemeyi indir',
+    download: 'İndir',
+    telemetryTitle: 'Crash ve telemetry',
+    telemetryCopy: 'Ön yüz hataları, server arızaları ve crash izleri yerelde yazılır. Merkezi teşhis istersen sonraki adımda uzak sink ekleyebilirsin.',
+    telemetryEventsLabel: 'Yerel event',
+    telemetryLastEventLabel: 'Son event',
+    telemetryCrashLabel: 'Crash log',
+    telemetryLogLabel: 'Telemetry log',
+    telemetryRemoteReady: 'Uzak sink bağlı',
+    telemetryLocalOnly: 'Sadece yerel teşhis',
+    updateCheckRunning: 'Güncellemeler kontrol ediliyor...',
     sentinelNoteTitle: 'Gatekeeper destek notu',
     sentinelNoteBody: 'Gatekeeper durumunu daha net görmek isteyen ileri seviye kullanıcılara Sentinel’i destek akışında opsiyonel yardımcı araç olarak öner; zorunlu hale getirme.',
     workflowPacksTitle: 'Workflow Packler',
@@ -1168,6 +1309,31 @@ function bindEvents() {
   })
   taskEditorForm?.addEventListener('submit', onTaskEditorSubmit)
   window.addEventListener('keydown', onGlobalKeydown)
+  window.addEventListener('error', event => {
+    void sendTelemetryEvent({
+      source: 'frontend',
+      level: 'error',
+      message: event.message || 'Unhandled window error',
+      stack: event.error?.stack || '',
+      context: {
+        file: event.filename || '',
+        line: event.lineno || 0,
+        column: event.colno || 0,
+      },
+    })
+  })
+  window.addEventListener('unhandledrejection', event => {
+    const reason = event.reason instanceof Error ? event.reason : new Error(String(event.reason ?? 'Unhandled rejection'))
+    void sendTelemetryEvent({
+      source: 'frontend',
+      level: 'error',
+      message: reason.message,
+      stack: reason.stack || '',
+      context: {
+        type: 'unhandledrejection',
+      },
+    })
+  })
   window.addEventListener('focus', () => {
     if (!state.pendingMcpOAuthRefresh) {
       return
@@ -1587,6 +1753,7 @@ function renderSettings(settings) {
   renderComposerTemplateSettings(settings)
   renderReminderSettings(settings)
   renderBilling(settings)
+  renderOperations(settings)
   renderPermissions(settings)
   renderIntegrations(settings)
   renderMcpDiagnostics(settings)
@@ -1629,6 +1796,18 @@ function renderBilling(settings) {
   })
 
   void maybeAutoClaimLatestPayment(settings.billing)
+  syncBillingPaymentRefresh(settings.billing)
+}
+
+function renderOperations(settings) {
+  if (!operationsPanel) {
+    return
+  }
+
+  operationsPanel.innerHTML = renderOperationsPanelMarkup(settings.operations, {
+    t,
+    formatTimestamp: value => formatTimestamp(value, localeForUi()),
+  })
 }
 
 function syncBillingDraft(billing) {
@@ -1648,6 +1827,9 @@ function syncBillingDraft(billing) {
   }
   if (!state.billingDraft.cryptoPlanId) {
     state.billingDraft.cryptoPlanId = billing.plans?.crypto?.[0]?.id ?? 'pro-annual'
+  }
+  if (!state.billingDraft.bankPlanId) {
+    state.billingDraft.bankPlanId = billing.plans?.bank?.find(plan => plan.available)?.id ?? 'pro-annual'
   }
   state.billingDraft.cardPlanId ||= billing.plans?.card?.[0]?.id ?? 'starter-monthly'
   state.billingDraft.networkId = currentNetwork?.id ?? state.billingDraft.networkId
@@ -4217,8 +4399,24 @@ async function onSettingsDrawerActionClick(event) {
       await createBillingCryptoPayment()
       return
     }
+    if (action === 'create-bank-payment') {
+      await createBillingBankPayment()
+      return
+    }
+    if (action === 'reset-local') {
+      await resetLocalBillingState()
+      return
+    }
     if (action === 'refresh-payment') {
       await refreshBillingPayment(billingAction.dataset.paymentId)
+      return
+    }
+    if (action === 'mark-bank-sent') {
+      await markBankPaymentSent(billingAction.dataset.paymentId)
+      return
+    }
+    if (action === 'approve-bank-payment') {
+      await approveManualBankPayment(billingAction.dataset.paymentId)
       return
     }
     if (action === 'simulate-payment') {
@@ -4229,6 +4427,15 @@ async function onSettingsDrawerActionClick(event) {
       await claimBillingPayment(billingAction.dataset.paymentId)
       return
     }
+  }
+
+  const appAction = event.target.closest('[data-app-action]')
+  if (appAction) {
+    event.preventDefault()
+    if (appAction.dataset.appAction === 'check-update') {
+      await checkForUpdates()
+    }
+    return
   }
 
   const copyAction = event.target.closest('[data-copy-value]')
@@ -4406,14 +4613,21 @@ async function openCardCheckout(planId) {
     const result = await fetchJson('/api/billing/checkout/card', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ planId }),
+      body: JSON.stringify({
+        planId,
+        email: state.billingDraft.email,
+        deviceName: state.billingDraft.deviceName,
+      }),
     })
     state.billingDraft.cardPlanId = planId
-    await fetchJson('/api/open-link', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: result.url }),
-    })
+    await applyBillingResult(result)
+    if (result.url) {
+      await fetchJson('/api/open-link', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: result.url }),
+      })
+    }
     setBusy(false, t('ready'))
   } catch (error) {
     showError(error)
@@ -4445,6 +4659,51 @@ async function createBillingCryptoPayment() {
       })
     }
     setBusy(false, t('billingCryptoReady'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function createBillingBankPayment() {
+  setBusy(true, t('billingOpeningCheckout'))
+  try {
+    const result = await fetchJson('/api/billing/checkout/bank', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        planId: state.billingDraft.bankPlanId,
+        email: state.billingDraft.email,
+        deviceName: state.billingDraft.deviceName,
+      }),
+    })
+    await applyBillingResult(result)
+    setBusy(false, t('billingPaymentUpdated'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function resetLocalBillingState() {
+  const confirmed = await showConfirmDialog({
+    title: t('billingResetLocalConfirmTitle'),
+    message: t('billingResetLocalConfirmBody'),
+  })
+  if (!confirmed) {
+    return
+  }
+
+  setBusy(true, t('billingResetLocal'))
+  try {
+    const result = await fetchJson('/api/billing/reset-local', {
+      method: 'POST',
+    })
+    state.billingDraft.email = ''
+    state.billingDraft.licenseKey = ''
+    state.billingDraft.payerAddress = ''
+    state.billingDraft.txHash = ''
+    state.billingClaimingPaymentIds.clear()
+    await applyBillingResult(result)
+    setBusy(false, t('billingResetLocalDone'))
   } catch (error) {
     showError(error)
   }
@@ -4489,19 +4748,94 @@ async function copyBillingValue(value) {
 }
 
 async function refreshBillingPayment(paymentId) {
+  await refreshBillingPaymentInternal(paymentId, {})
+}
+
+async function refreshBillingPaymentInternal(paymentId, options = {}) {
   if (!paymentId) {
     return
   }
 
-  setBusy(true, t('billingRefreshingPayment'))
+  if (!options.silent) {
+    setBusy(true, t('billingRefreshingPayment'))
+  }
   try {
     const result = await fetchJson(`/api/billing/payments/${encodeURIComponent(paymentId)}/refresh`, {
+      method: 'POST',
+    })
+    await applyBillingResult(result)
+    if (!options.silent) {
+      setBusy(false, t('billingPaymentUpdated'))
+    }
+  } catch (error) {
+    if (!options.silent) {
+      showError(error)
+    }
+  }
+}
+
+async function markBankPaymentSent(paymentId) {
+  if (!paymentId) {
+    return
+  }
+
+  setBusy(true, t('billingPaymentUpdated'))
+  try {
+    const result = await fetchJson(`/api/billing/payments/${encodeURIComponent(paymentId)}/mark-bank-sent`, {
       method: 'POST',
     })
     await applyBillingResult(result)
     setBusy(false, t('billingPaymentUpdated'))
   } catch (error) {
     showError(error)
+  }
+}
+
+async function approveManualBankPayment(paymentId) {
+  if (!paymentId) {
+    return
+  }
+
+  setBusy(true, t('billingClaimingLicense'))
+  try {
+    const result = await fetchJson(`/api/billing/payments/${encodeURIComponent(paymentId)}/approve-manual`, {
+      method: 'POST',
+    })
+    await applyBillingResult(result)
+    setBusy(false, t('billingClaimed'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function checkForUpdates() {
+  setBusy(true, t('updateCheckRunning'))
+  try {
+    const result = await fetchJson('/api/app/update/check', {
+      method: 'POST',
+    })
+    if (result?.operations && state.settings) {
+      state.settings = {
+        ...state.settings,
+        operations: result.operations,
+      }
+      renderOperations(state.settings)
+    }
+    setBusy(false, t('ready'))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function sendTelemetryEvent(event) {
+  try {
+    await fetchJson('/api/telemetry/events', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(event),
+    })
+  } catch {
+    // Keep telemetry best-effort to avoid recursive UI failures.
   }
 }
 
@@ -4586,6 +4920,28 @@ async function maybeAutoClaimLatestPayment(billing) {
   } finally {
     state.billingClaimingPaymentIds.delete(payment.providerPaymentId)
   }
+}
+
+function syncBillingPaymentRefresh(billing) {
+  const refreshable = (billing?.payments ?? []).find(payment => (
+    ['waiting', 'confirming', 'processing'].includes(payment.status)
+    && ['stripe', 'wallet-direct', 'cryptomus', 'nowpayments'].includes(payment.provider)
+  ))
+
+  if (billingRefreshTimer) {
+    window.clearTimeout(billingRefreshTimer)
+    billingRefreshTimer = null
+  }
+
+  if (!refreshable) {
+    return
+  }
+
+  billingRefreshTimer = window.setTimeout(() => {
+    void refreshBillingPaymentInternal(refreshable.providerPaymentId, {
+      silent: true,
+    })
+  }, 7000)
 }
 
 function toggleChatsSection() {

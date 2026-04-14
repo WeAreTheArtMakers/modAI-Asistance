@@ -9,7 +9,7 @@ on:
       tag:
         description: "Release tag to create or update"
         required: true
-        default: "v0.1.2"
+        default: "v0.1.4"
 
 permissions:
   contents: write
@@ -25,9 +25,21 @@ jobs:
           - os: ubuntu-latest
             label: linux
             command: npm run build:portable
+            artifact_path: dist/modAI-tauri-linux-*.tar.gz
           - os: windows-latest
             label: windows
             command: npm run build:portable
+            artifact_path: dist/modAI-tauri-windows-*.zip
+          - os: macos-15
+            label: macos-arm64
+            command: npm run build:mac:arm64
+            rust_target: aarch64-apple-darwin
+            artifact_path: dist/modAI-tauri-macos-arm64.zip
+          - os: macos-15-intel
+            label: macos-x64
+            command: npm run build:mac:x64
+            rust_target: x86_64-apple-darwin
+            artifact_path: dist/modAI-tauri-macos-x64.zip
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +51,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target || '' }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -68,9 +82,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-${{ matrix.label }}
-          path: |
-            dist/modAI-tauri-linux-*.tar.gz
-            dist/modAI-tauri-windows-*.zip
+          path: ${{ matrix.artifact_path }}
 
   release:
     name: Publish Release

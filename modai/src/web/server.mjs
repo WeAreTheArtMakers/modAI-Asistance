@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { execFile as execFileCallback } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
@@ -24,18 +25,34 @@ import { SessionStore } from '../services/SessionStore.mjs'
 import { SkillStore } from '../services/SkillStore.mjs'
 import {
   activateLemonLicense,
+  createBankTransferInvoice,
+  createCryptomusPayment,
   createDirectCryptoInvoice,
+  createStripeCheckoutSession,
+  extractCryptomusWebhookRecord,
   extractLemonWebhookRecord,
   extractNowPaymentsWebhookRecord,
+  extractStripeWebhookRecord,
   getBillingCatalog,
   getBillingEnvironment,
   getCardCheckoutUrl,
+  getCardCheckoutProvider,
+  hasCryptomusConfig,
   isSuccessfulCryptoStatus,
+  isSuccessfulStripeStatus,
+  refreshCryptomusPayment,
+  refreshDirectCryptoPayment,
+  refreshManualBankPayment,
+  refreshNowPaymentsPayment,
+  refreshStripeCheckoutPayment,
   resolveBillingPlan,
+  verifyCryptomusWebhookSignature,
   verifyDirectCryptoTransfer,
   verifyLemonWebhookSignature,
   verifyNowPaymentsWebhookSignature,
+  verifyStripeWebhookSignature,
 } from '../services/billingGateway.mjs'
+import { checkForAppUpdates, getOperationsSnapshot, recordTelemetryEvent } from '../services/operationsService.mjs'
 import { applyMcpSecretUpdates, applyProviderSecretUpdates, prepareRuntimeConfig } from '../services/providerSecrets.mjs'
 import { createDefaultProviderRegistry } from '../core/ProviderRegistry.mjs'
 import { inferVisionSupport } from '../providers/messageContent.mjs'
@@ -43,7 +60,9 @@ import { safeJson } from '../utils/json.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const staticDir = join(__dirname, 'static')
+const runtimeProjectDir = process.env.MODAI_RUNTIME_DIR || process.cwd()
 const configStore = new ConfigStore()
+loadRuntimeEnvFiles(configStore, runtimeProjectDir)
 const keychainStore = new KeychainStore()
 const sessionStore = new SessionStore(configStore)
 const billingStore = new BillingStore(configStore)
@@ -60,10 +79,10 @@ for (let index = 2; index < process.argv.length; index += 1) {
 
 const port = Number(args.get('port') || process.env.PORT || process.env.MODAI_WEB_PORT || 8787)
 const host = process.env.MODAI_WEB_HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1')
+process.env.MODAI_WEB_PORT ||= String(port)
 const parentPid = Number(process.env.MODAI_PARENT_PID || 0)
 const workspaceDirOverride = process.env.MODAI_WORKSPACE_DIR || ''
 let workspaceDir = resolve(workspaceDirOverride || process.env.HOME || homedir() || process.cwd())
-const runtimeProjectDir = process.env.MODAI_RUNTIME_DIR || process.cwd()
 const skillStore = new SkillStore(configStore, { cwd: runtimeProjectDir })
 const pluginStore = new PluginStore(configStore, { cwd: runtimeProjectDir })
 const execFile = promisify(execFileCallback)
@@ -76,6 +95,13 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, { ok: true })
     }
 
+    if (request.method === 'GET' && url.pathname === '/billing/checkout-return') {
+      return sendHtml(response, 200, buildCheckoutReturnPage({
+        provider: url.searchParams.get('provider') ?? '',
+        status: url.searchParams.get('status') ?? '',
+      }))
+    }
+
     if (request.method === 'GET' && (url.pathname === '/api/config' || url.pathname === '/api/settings')) {
       const config = await loadRuntimeConfig()
       return sendJson(response, 200, await buildClientState(config))
@@ -84,8 +110,21 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/billing') {
       return sendJson(response, 200, await billingStore.getClientState({
         catalog: getBillingCatalog(),
-        environment: getBillingEnvironment(),
+        environment: buildBillingEnvironmentSnapshot(),
       }))
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/app/update/check') {
+      return sendJson(response, 200, await checkForAppUpdates({
+        configStore,
+        runtimeDir: runtimeProjectDir,
+      }))
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/telemetry/events') {
+      const body = await readJson(request)
+      const result = await recordTelemetryEvent(configStore, body)
+      return sendJson(response, 200, result)
     }
 
     if (request.method === 'GET' && url.pathname === '/api/workspace/outline') {
@@ -268,13 +307,41 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, buildBillingResponse(nextState))
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/billing/reset-local') {
+      const nextState = await billingStore.resetLocalState()
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/billing/checkout/card') {
       const body = await readJson(request)
       const planId = String(body.planId ?? '').trim()
-      const checkoutUrl = getCardCheckoutUrl(planId)
-      if (!checkoutUrl) {
+      const plan = resolveBillingPlan(planId)
+      const provider = getCardCheckoutProvider(planId)
+      if (!provider) {
         return sendJson(response, 400, { error: 'Card checkout is not configured for this plan' })
       }
+
+      if (provider === 'stripe') {
+        const payment = await createStripeCheckoutSession({
+          plan,
+          email: String(body.email ?? '').trim(),
+          deviceId: String(body.deviceId ?? '').trim(),
+          deviceName: String(body.deviceName ?? '').trim(),
+        })
+        const nextState = await billingStore.createPayment({
+          ...payment,
+          planId: plan.id,
+          planLabel: plan.label,
+        })
+        return sendJson(response, 200, {
+          ok: true,
+          planId,
+          url: payment.payUrl,
+          billing: buildBillingSnapshot(nextState),
+        })
+      }
+
+      const checkoutUrl = getCardCheckoutUrl(planId)
       return sendJson(response, 200, {
         ok: true,
         planId,
@@ -285,13 +352,39 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/api/billing/checkout/crypto') {
       const body = await readJson(request)
       const plan = resolveBillingPlan(String(body.planId ?? '').trim())
-      const payment = await createDirectCryptoInvoice({
+      const payment = hasCryptomusConfig()
+        ? await createCryptomusPayment({
+            plan,
+            networkId: String(body.networkId ?? '').trim(),
+            currency: String(body.assetId ?? '').trim(),
+            email: String(body.email ?? '').trim(),
+            deviceName: String(body.deviceName ?? '').trim(),
+          })
+        : await createDirectCryptoInvoice({
+            plan,
+            networkId: String(body.networkId ?? '').trim(),
+            assetId: String(body.assetId ?? '').trim(),
+            email: String(body.email ?? '').trim(),
+            deviceName: String(body.deviceName ?? '').trim(),
+            payerAddress: String(body.payerAddress ?? '').trim(),
+          })
+
+      const nextState = await billingStore.createPayment({
+        ...payment,
+        planId: plan.id,
+        planLabel: plan.label,
+      })
+
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/billing/checkout/bank') {
+      const body = await readJson(request)
+      const plan = resolveBillingPlan(String(body.planId ?? '').trim())
+      const payment = await createBankTransferInvoice({
         plan,
-        networkId: String(body.networkId ?? '').trim(),
-        assetId: String(body.assetId ?? '').trim(),
         email: String(body.email ?? '').trim(),
         deviceName: String(body.deviceName ?? '').trim(),
-        payerAddress: String(body.payerAddress ?? '').trim(),
       })
 
       const nextState = await billingStore.createPayment({
@@ -311,7 +404,72 @@ const server = createServer(async (request, response) => {
         return sendJson(response, 404, { error: 'Payment not found' })
       }
 
-      return sendJson(response, 200, buildBillingResponse(currentState))
+      let nextState = currentState
+      let refreshed = null
+      if (payment.provider === 'stripe') {
+        refreshed = await refreshStripeCheckoutPayment(payment)
+        if (refreshed) {
+          const plan = resolveBillingPlan(payment.planId)
+          nextState = await billingStore.updatePaymentStatus(providerPaymentId, refreshed, {
+            issueLicense: isSuccessfulStripeStatus(refreshed.paymentStatus),
+            source: 'stripe',
+            activationLimit: plan.activationLimit,
+            expiresAt: refreshed.currentPeriodEnd ?? null,
+            orderId: refreshed.subscriptionId || refreshed.orderId || payment.orderId || payment.providerPaymentId,
+          })
+          if (isSuccessfulStripeStatus(refreshed.paymentStatus)) {
+            nextState = await billingStore.issueLicense({
+              source: 'stripe',
+              provider: 'stripe',
+              planId: payment.planId,
+              planLabel: payment.planLabel,
+              email: refreshed.email || payment.email,
+              activationLimit: plan.activationLimit,
+              expiresAt: refreshed.currentPeriodEnd ?? null,
+              orderId: refreshed.subscriptionId || refreshed.orderId || payment.orderId || payment.providerPaymentId,
+              metadata: refreshed.raw,
+              providedLicenseKey: nextState.payments.find(item => item.providerPaymentId === providerPaymentId)?.licenseKey ?? '',
+            })
+          }
+        }
+      } else if (payment.provider === 'cryptomus') {
+        refreshed = await refreshCryptomusPayment(payment)
+        if (refreshed) {
+          const plan = resolveBillingPlan(payment.planId)
+          nextState = await billingStore.updatePaymentStatus(providerPaymentId, refreshed, {
+            issueLicense: isSuccessfulCryptoStatus(refreshed.paymentStatus),
+            source: 'crypto',
+            activationLimit: plan.activationLimit,
+          })
+        }
+      } else if (payment.provider === 'wallet-direct') {
+        refreshed = await refreshDirectCryptoPayment(payment)
+        if (refreshed) {
+          const plan = resolveBillingPlan(payment.planId)
+          nextState = await billingStore.updatePaymentStatus(providerPaymentId, refreshed, {
+            issueLicense: isSuccessfulCryptoStatus(refreshed.paymentStatus),
+            source: 'crypto',
+            activationLimit: plan.activationLimit,
+          })
+        }
+      } else if (payment.provider === 'nowpayments') {
+        refreshed = await refreshNowPaymentsPayment(providerPaymentId)
+        if (refreshed) {
+          const plan = resolveBillingPlan(payment.planId)
+          nextState = await billingStore.updatePaymentStatus(providerPaymentId, refreshed, {
+            issueLicense: isSuccessfulCryptoStatus(refreshed.paymentStatus),
+            source: 'crypto',
+            activationLimit: plan.activationLimit,
+          })
+        }
+      } else if (payment.provider === 'bank-transfer') {
+        refreshed = await refreshManualBankPayment(payment)
+        if (refreshed) {
+          nextState = await billingStore.updatePaymentStatus(providerPaymentId, refreshed)
+        }
+      }
+
+      return sendJson(response, 200, buildBillingResponse(nextState))
     }
 
     if (request.method === 'POST' && url.pathname.startsWith('/api/billing/payments/') && url.pathname.endsWith('/verify-transfer')) {
@@ -331,6 +489,53 @@ const server = createServer(async (request, response) => {
       const nextState = await billingStore.updatePaymentStatus(providerPaymentId, verification, {
         issueLicense: isSuccessfulCryptoStatus(verification.paymentStatus),
         source: 'crypto',
+        activationLimit: plan.activationLimit,
+      })
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname.startsWith('/api/billing/payments/') && url.pathname.endsWith('/mark-bank-sent')) {
+      const providerPaymentId = decodeURIComponent(url.pathname.slice('/api/billing/payments/'.length, -'/mark-bank-sent'.length))
+      const currentState = await billingStore.load()
+      const payment = currentState.payments.find(item => item.providerPaymentId === providerPaymentId)
+      if (!payment) {
+        return sendJson(response, 404, { error: 'Payment not found' })
+      }
+      if (payment.provider !== 'bank-transfer') {
+        return sendJson(response, 400, { error: 'Payment is not an IBAN / FAST invoice' })
+      }
+
+      const nextState = await billingStore.updatePaymentStatus(providerPaymentId, {
+        paymentStatus: 'review',
+      })
+      return sendJson(response, 200, buildBillingResponse(nextState))
+    }
+
+    if (request.method === 'POST' && url.pathname.startsWith('/api/billing/payments/') && url.pathname.endsWith('/approve-manual')) {
+      const providerPaymentId = decodeURIComponent(url.pathname.slice('/api/billing/payments/'.length, -'/approve-manual'.length))
+      const currentState = await billingStore.load()
+      const payment = currentState.payments.find(item => item.providerPaymentId === providerPaymentId)
+      if (!payment) {
+        return sendJson(response, 404, { error: 'Payment not found' })
+      }
+      if (payment.provider !== 'bank-transfer') {
+        return sendJson(response, 400, { error: 'Payment is not eligible for manual approval' })
+      }
+
+      const bankEnvironment = getBillingEnvironment().bank ?? {}
+      if (bankEnvironment.localApprovalAvailable !== true) {
+        return sendJson(response, 403, { error: 'Manual approval is disabled for this build' })
+      }
+
+      const plan = resolveBillingPlan(payment.planId)
+      const nextState = await billingStore.updatePaymentStatus(providerPaymentId, {
+        paymentStatus: 'finished',
+        actuallyPaid: payment.payAmount,
+        outcomeAmount: payment.payAmount,
+        outcomeCurrency: payment.payCurrency,
+      }, {
+        issueLicense: true,
+        source: 'bank',
         activationLimit: plan.activationLimit,
       })
       return sendJson(response, 200, buildBillingResponse(nextState))
@@ -406,6 +611,83 @@ const server = createServer(async (request, response) => {
       })
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/webhooks/stripe') {
+      const rawBody = await readRequestBody(request)
+      const secret = String(process.env.STRIPE_WEBHOOK_SECRET ?? '').trim()
+      const signature = String(request.headers['stripe-signature'] ?? '')
+      if (secret && !verifyStripeWebhookSignature(rawBody, signature, secret)) {
+        return sendJson(response, 401, { error: 'Invalid Stripe signature' })
+      }
+
+      const payload = rawBody ? JSON.parse(rawBody) : {}
+      const record = extractStripeWebhookRecord(payload)
+      let nextState = await billingStore.recordWebhookEvent({
+        provider: record.provider,
+        eventName: record.eventName,
+        providerObjectId: record.providerObjectId,
+        status: record.paymentStatus,
+        payload,
+      })
+
+      const matchedPayment = nextState.payments.find(item => (
+        item.providerPaymentId === record.providerPaymentId
+        || item.checkoutSessionId === record.checkoutSessionId
+        || (record.orderId && item.orderId === record.orderId)
+        || (record.subscriptionId && item.subscriptionId === record.subscriptionId)
+      ))
+
+      if (matchedPayment) {
+        nextState = await billingStore.updatePaymentStatus(matchedPayment.providerPaymentId, {
+          paymentStatus: record.paymentStatus,
+          email: record.email || matchedPayment.email,
+          checkoutSessionId: record.checkoutSessionId || matchedPayment.checkoutSessionId,
+          subscriptionId: record.subscriptionId || matchedPayment.subscriptionId,
+          subscriptionStatus: record.subscriptionStatus || matchedPayment.subscriptionStatus,
+          currentPeriodEnd: record.currentPeriodEnd ?? matchedPayment.currentPeriodEnd ?? null,
+          raw: payload,
+        }, {
+          issueLicense: isSuccessfulStripeStatus(record.paymentStatus),
+          source: 'stripe',
+          activationLimit: resolveBillingPlan(matchedPayment.planId).activationLimit,
+          expiresAt: record.currentPeriodEnd ?? null,
+          orderId: record.subscriptionId || record.orderId || matchedPayment.orderId || matchedPayment.providerPaymentId,
+        })
+
+        if (isSuccessfulStripeStatus(record.paymentStatus)) {
+          nextState = await billingStore.issueLicense({
+            source: 'stripe',
+            provider: 'stripe',
+            planId: matchedPayment.planId,
+            planLabel: matchedPayment.planLabel,
+            email: record.email || matchedPayment.email,
+            activationLimit: resolveBillingPlan(matchedPayment.planId).activationLimit,
+            expiresAt: record.currentPeriodEnd ?? null,
+            orderId: record.subscriptionId || record.orderId || matchedPayment.orderId || matchedPayment.providerPaymentId,
+            metadata: payload,
+            providedLicenseKey: nextState.payments.find(item => item.providerPaymentId === matchedPayment.providerPaymentId)?.licenseKey ?? '',
+          })
+        }
+      } else if (isSuccessfulStripeStatus(record.paymentStatus) && record.planId) {
+        const plan = resolveBillingPlan(record.planId)
+        nextState = await billingStore.issueLicense({
+          source: 'stripe',
+          provider: 'stripe',
+          planId: plan.id,
+          planLabel: record.planLabel || plan.label,
+          email: record.email,
+          activationLimit: plan.activationLimit,
+          expiresAt: record.currentPeriodEnd ?? null,
+          orderId: record.subscriptionId || record.orderId || record.providerObjectId,
+          metadata: payload,
+        })
+      }
+
+      return sendJson(response, 200, {
+        ok: true,
+        billing: buildBillingSnapshot(nextState),
+      })
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/webhooks/crypto') {
       const rawBody = await readRequestBody(request)
       const secret = String(process.env.NOWPAYMENTS_IPN_SECRET ?? '').trim()
@@ -435,6 +717,50 @@ const server = createServer(async (request, response) => {
             activationLimit: plan.activationLimit,
           })
         }
+      }
+
+      return sendJson(response, 200, {
+        ok: true,
+        billing: buildBillingSnapshot(nextState),
+      })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/webhooks/cryptomus') {
+      const payload = await readJson(request)
+      if (!verifyCryptomusWebhookSignature(payload)) {
+        return sendJson(response, 401, { error: 'Invalid Cryptomus signature' })
+      }
+
+      const record = extractCryptomusWebhookRecord(payload)
+      let nextState = await billingStore.recordWebhookEvent({
+        provider: record.provider,
+        eventName: 'payment_status',
+        providerObjectId: record.providerPaymentId,
+        status: record.paymentStatus,
+        payload,
+      })
+
+      const matchedPayment = nextState.payments.find(item => (
+        item.providerPaymentId === record.providerPaymentId
+        || (record.orderId && item.orderId === record.orderId)
+      ))
+
+      if (matchedPayment) {
+        nextState = await billingStore.updatePaymentStatus(matchedPayment.providerPaymentId, {
+          paymentStatus: record.paymentStatus,
+          email: record.email || matchedPayment.email,
+          payAmount: record.payAmount || matchedPayment.payAmount,
+          payCurrency: record.payCurrency || matchedPayment.payCurrency,
+          payAddress: record.payAddress || matchedPayment.payAddress,
+          txHash: record.txHash || matchedPayment.txHash,
+          payerAddress: record.payerAddress || matchedPayment.payerAddress,
+          quoteExpiresAt: record.quoteExpiresAt ?? matchedPayment.quoteExpiresAt ?? null,
+          raw: payload,
+        }, {
+          issueLicense: isSuccessfulCryptoStatus(record.paymentStatus),
+          source: 'crypto',
+          activationLimit: resolveBillingPlan(matchedPayment.planId).activationLimit,
+        })
       }
 
       return sendJson(response, 200, {
@@ -837,6 +1163,7 @@ server.on('error', error => {
 
 installParentWatch()
 installShutdownHooks()
+installTelemetryHooks()
 
 async function loadRuntimeConfig() {
   const config = await configStore.load()
@@ -933,7 +1260,11 @@ async function buildClientState(config) {
     tasks,
     billing: await billingStore.getClientState({
       catalog: getBillingCatalog(),
-      environment: getBillingEnvironment(),
+      environment: buildBillingEnvironmentSnapshot(),
+    }),
+    operations: await getOperationsSnapshot({
+      configStore,
+      runtimeDir: runtimeProjectDir,
     }),
     workspaceDir,
   }
@@ -1821,6 +2152,40 @@ function buildMcpOAuthResultPage(result = {}) {
 </html>`
 }
 
+function buildCheckoutReturnPage(result = {}) {
+  const success = String(result.status ?? '') === 'success'
+  const title = success ? 'Payment captured' : 'Checkout closed'
+  const detail = success
+    ? 'Return to the modAI app. It can refresh the payment state and apply the issued license on this device.'
+    : 'Return to the modAI app to retry checkout or choose a different payment rail.'
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtmlText(title)}</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background: #090b10; color: #f5f7fb; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: radial-gradient(circle at 20% 10%, rgba(124, 156, 255, 0.18), transparent 34%), #090b10; }
+      main { width: min(560px, calc(100vw - 32px)); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; padding: 28px; background: rgba(15,18,25,.92); box-shadow: 0 30px 80px rgba(0,0,0,.38); }
+      .eyebrow { color: #93a4c7; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; font-weight: 760; }
+      h1 { margin: 10px 0; font-size: 28px; }
+      p { color: #b7c2d8; line-height: 1.6; }
+      .status { display: inline-flex; margin-top: 14px; padding: 8px 12px; border-radius: 999px; border: 1px solid ${success ? 'rgba(116,211,159,.35)' : 'rgba(255,194,102,.35)'}; color: ${success ? '#74d39f' : '#ffc266'}; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">modAI checkout</div>
+      <h1>${escapeHtmlText(title)}</h1>
+      <p>${escapeHtmlText(detail)}</p>
+      <div class="status">${escapeHtmlText(success ? 'Refresh the app payment panel' : 'Checkout not completed')}</div>
+    </main>
+  </body>
+</html>`
+}
+
 function escapeHtmlText(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -1840,9 +2205,93 @@ function buildBillingResponse(state) {
 function buildBillingSnapshot(state) {
   return buildBillingClientState(state, {
     catalog: getBillingCatalog(),
-    environment: getBillingEnvironment(),
+    environment: buildBillingEnvironmentSnapshot(),
     now: new Date(),
   })
+}
+
+function getBillingConfigFiles() {
+  return [
+    join(configStore.getBaseDir(), 'runtime.env'),
+    join(runtimeProjectDir, '.modai', 'runtime.env'),
+  ]
+}
+
+function buildBillingEnvironmentSnapshot() {
+  return {
+    ...getBillingEnvironment(),
+    configFiles: getBillingConfigFiles(),
+    setup: {
+      cryptomusKeys: [
+        'CRYPTOMUS_MERCHANT_ID',
+        'CRYPTOMUS_API_KEY',
+        'CRYPTOMUS_WEBHOOK_SECRET',
+        'MODAI_BILLING_WEBHOOK_BASE_URL',
+      ],
+      hostedKeys: [
+        'MODAI_HOSTED_PROVIDER_LABEL',
+        'MODAI_HOSTED_STARTER_MONTHLY_URL',
+        'MODAI_HOSTED_PRO_ANNUAL_URL',
+        'MODAI_HOSTED_FOUNDER_URL',
+      ],
+      bankKeys: [
+        'MODAI_BANK_ACCOUNT_NAME',
+        'MODAI_BANK_NAME',
+        'MODAI_BANK_IBAN',
+        'MODAI_BANK_USD_TO_TRY_RATE',
+        'MODAI_BANK_QUOTE_CURRENCY',
+        'MODAI_BANK_REFERENCE_PREFIX',
+        'MODAI_BANK_FAST_ALIAS',
+      ],
+    },
+  }
+}
+
+function loadRuntimeEnvFiles(store, runtimeDir = process.cwd()) {
+  const configFiles = [
+    join(store.getBaseDir(), 'runtime.env'),
+    join(runtimeDir, '.modai', 'runtime.env'),
+  ]
+
+  for (const filePath of configFiles) {
+    try {
+      const content = readFileSync(filePath, 'utf8')
+      applyEnvFileContent(content)
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
+        console.warn(`Failed to load env file: ${filePath}`)
+      }
+    }
+  }
+}
+
+function applyEnvFileContent(content) {
+  for (const rawLine of String(content ?? '').split(/\r?\n/u)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) {
+      continue
+    }
+
+    const separatorIndex = line.indexOf('=')
+    if (separatorIndex <= 0) {
+      continue
+    }
+
+    const key = line.slice(0, separatorIndex).trim()
+    let value = line.slice(separatorIndex + 1).trim()
+    if (!key || Object.hasOwn(process.env, key)) {
+      continue
+    }
+
+    if (
+      (value.startsWith('"') && value.endsWith('"'))
+      || (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+
+    process.env[key] = value
+  }
 }
 
 function installParentWatch() {
@@ -1868,6 +2317,33 @@ function installShutdownHooks() {
       void shutdown(signal)
     })
   }
+}
+
+function installTelemetryHooks() {
+  process.on('uncaughtExceptionMonitor', error => {
+    void recordTelemetryEvent(configStore, {
+      source: 'server',
+      level: 'fatal',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : '',
+      context: {
+        hook: 'uncaughtExceptionMonitor',
+      },
+    })
+  })
+
+  process.on('unhandledRejection', reason => {
+    const error = reason instanceof Error ? reason : new Error(String(reason ?? 'Unhandled rejection'))
+    void recordTelemetryEvent(configStore, {
+      source: 'server',
+      level: 'error',
+      message: error.message,
+      stack: error.stack || '',
+      context: {
+        hook: 'unhandledRejection',
+      },
+    })
+  })
 }
 
 let shuttingDown = false

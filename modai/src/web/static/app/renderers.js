@@ -4,14 +4,31 @@ export function renderBillingPanelMarkup(billing, { draft, t, formatTimestamp })
   const entitlement = billing?.entitlement ?? { status: 'inactive' }
   const activation = billing?.activation ?? { status: 'inactive' }
   const cardPlans = billing?.plans?.card ?? []
+  const bankPlans = billing?.plans?.bank ?? []
   const cryptoPlans = billing?.plans?.crypto ?? []
   const cryptoNetworks = billing?.networks ?? []
   const cryptoMode = billing?.environment?.crypto?.mode ?? 'sandbox'
   const latestPayment = (billing?.payments ?? [])[0] ?? null
+  const availableBankPlans = bankPlans.filter(plan => plan.available)
   const currentCryptoPlan = cryptoPlans.find(plan => plan.id === draft.cryptoPlanId) ?? cryptoPlans[0] ?? null
+  const currentBankPlan = availableBankPlans.find(plan => plan.id === draft.bankPlanId) ?? availableBankPlans[0] ?? null
   const currentNetwork = cryptoNetworks.find(network => network.id === draft.networkId) ?? cryptoNetworks[0] ?? null
   const currentAsset = currentNetwork?.assets?.find(asset => asset.id === draft.assetId) ?? currentNetwork?.assets?.[0] ?? null
-  const paymentMarkup = latestPayment ? renderLatestPaymentMarkup(latestPayment, { t, formatTimestamp, sandboxMode: billing?.environment?.crypto?.sandboxMode === true }) : ''
+  const activationTitle = entitlement.status === 'active'
+    ? t('billingManageLicenseTitle')
+    : t('billingActivateTitle')
+  const activationCopy = entitlement.status === 'active'
+    ? t('billingManageLicenseCopy')
+    : t('billingActivateCopy')
+  const setupMarkup = renderBillingSetupMarkup(billing, { t })
+  const paymentMarkup = latestPayment
+    ? renderLatestPaymentMarkup(latestPayment, {
+        t,
+        formatTimestamp,
+        sandboxMode: billing?.environment?.crypto?.sandboxMode === true,
+        bankLocalApproval: billing?.environment?.bank?.localApprovalAvailable === true,
+      })
+    : ''
 
   return `
     <div class="billing-shell">
@@ -44,9 +61,11 @@ export function renderBillingPanelMarkup(billing, { draft, t, formatTimestamp })
         </div>
       </div>
 
+      ${setupMarkup}
+
       <form class="billing-form-card" data-billing-form="activate">
-        <div class="section-title">${escapeHtml(t('billingActivateTitle'))}</div>
-        <p class="billing-copy">${escapeHtml(t('billingActivateCopy'))}</p>
+        <div class="section-title">${escapeHtml(activationTitle)}</div>
+        <p class="billing-copy">${escapeHtml(activationCopy)}</p>
         <div class="field-grid">
           <label class="field">
             <span>${escapeHtml(t('billingEmailLabel'))}</span>
@@ -88,12 +107,34 @@ export function renderBillingPanelMarkup(billing, { draft, t, formatTimestamp })
         </section>
 
         <section class="billing-form-card">
+          <div class="section-title">${escapeHtml(t('billingBankRailTitle'))}</div>
+          <p class="billing-copy">${escapeHtml(t('billingBankRailCopy'))}</p>
+          <div class="billing-inline-note">${escapeHtml(t('billingBankModeManual'))}</div>
+          <div class="field-grid">
+            <label class="field">
+              <span>${escapeHtml(t('billingBankPlanTitle'))}</span>
+              <select name="bankPlanId">
+                ${availableBankPlans.map(plan => `
+                  <option value="${escapeHtml(plan.id)}" ${plan.id === (currentBankPlan?.id ?? '') ? 'selected' : ''}>${escapeHtml(`${plan.label} · $${plan.amountUsd}`)}</option>
+                `).join('')}
+              </select>
+            </label>
+          </div>
+          <div class="billing-actions">
+            <button type="button" class="secondary" data-billing-action="create-bank-payment" ${availableBankPlans.length ? '' : 'disabled'}>${escapeHtml(t('billingCreateBankPayment'))}</button>
+          </div>
+          ${availableBankPlans.length ? '' : `<div class="empty-card">${escapeHtml(t('billingBankSetupNeeded'))}</div>`}
+        </section>
+
+        <section class="billing-form-card">
           <div class="section-title">${escapeHtml(t('billingCryptoRailTitle'))}</div>
           <p class="billing-copy">${escapeHtml(t('billingCryptoRailCopy'))}</p>
-          <div class="billing-inline-note ${escapeHtml(cryptoMode === 'direct-wallet' ? 'live' : 'warn')}">${escapeHtml(
+          <div class="billing-inline-note ${escapeHtml(cryptoMode === 'sandbox' ? 'warn' : 'live')}">${escapeHtml(
             cryptoMode === 'direct-wallet'
               ? t('billingCryptoModeLive')
-              : t('billingCryptoModeSandbox'),
+              : cryptoMode === 'cryptomus'
+                ? t('billingCryptoModeProcessor')
+                : t('billingCryptoModeSandbox'),
           )}</div>
           <div class="field-grid">
             <label class="field">
@@ -144,9 +185,171 @@ export function renderBillingPanelMarkup(billing, { draft, t, formatTimestamp })
           <div class="billing-actions">
             <button type="button" class="primary" data-billing-action="create-crypto-payment">${escapeHtml(t('billingCreateCryptoPayment'))}</button>
           </div>
-          ${paymentMarkup}
         </section>
       </div>
+      ${paymentMarkup ? `
+        <section class="billing-form-card">
+          <div class="section-title">${escapeHtml(t('billingLatestPaymentTitle'))}</div>
+          ${paymentMarkup}
+        </section>
+      ` : ''}
+    </div>
+  `
+}
+
+function renderBillingSetupMarkup(billing, { t }) {
+  const environment = billing?.environment ?? {}
+  const configFiles = environment.configFiles ?? []
+  const setup = environment.setup ?? {}
+  const setupCards = [
+    [t('billingSetupHomeFile'), configFiles[0] ?? ''],
+    [t('billingSetupRuntimeFile'), configFiles[1] ?? ''],
+  ]
+
+  return `
+    <section class="billing-form-card">
+      <div class="billing-setup-head">
+        <div>
+          <div class="section-title">${escapeHtml(t('billingSetupTitle'))}</div>
+          <p class="billing-copy">${escapeHtml(t('billingSetupCopy'))}</p>
+        </div>
+        <div class="billing-pill-row">
+          <span class="billing-status-pill ${environment.crypto?.mode === 'cryptomus' ? 'active' : 'inactive'}">${escapeHtml(environment.crypto?.mode === 'cryptomus' ? t('billingSetupReady') : t('billingSetupMissing'))} ${escapeHtml(t('billingSetupCryptomusShort'))}</span>
+          <span class="billing-status-pill ${environment.hosted?.configured ? 'active' : 'inactive'}">${escapeHtml(environment.hosted?.configured ? t('billingSetupReady') : t('billingSetupMissing'))} ${escapeHtml(t('billingSetupHostedShort'))}</span>
+          <span class="billing-status-pill ${environment.bank?.configured ? 'active' : 'inactive'}">${escapeHtml(environment.bank?.configured ? t('billingSetupReady') : t('billingSetupMissing'))} ${escapeHtml(t('billingSetupBankShort'))}</span>
+        </div>
+      </div>
+
+      <div class="billing-setup-grid">
+        ${setupCards.map(([label, path]) => renderBillingSetupPathCard(label, path, { t })).join('')}
+      </div>
+
+      <div class="billing-config-groups">
+        ${renderBillingSetupGroup({
+          title: t('billingSetupCryptomusTitle'),
+          hint: t('billingSetupCryptomusHint'),
+          keys: setup.cryptomusKeys ?? [],
+          ready: environment.crypto?.mode === 'cryptomus',
+          t,
+        })}
+        ${renderBillingSetupGroup({
+          title: t('billingSetupHostedTitle'),
+          hint: t('billingSetupHostedHint', {
+            provider: environment.hosted?.providerLabel || 'Hosted checkout',
+          }),
+          keys: setup.hostedKeys ?? [],
+          ready: environment.hosted?.configured === true,
+          t,
+        })}
+        ${renderBillingSetupGroup({
+          title: t('billingSetupBankTitle'),
+          hint: t('billingSetupBankHint'),
+          keys: setup.bankKeys ?? [],
+          ready: environment.bank?.configured === true,
+          t,
+        })}
+      </div>
+
+      <div class="billing-actions">
+        <button type="button" class="secondary billing-danger-button" data-billing-action="reset-local">${escapeHtml(t('billingResetLocal'))}</button>
+      </div>
+      <div class="billing-inline-note warn">${escapeHtml(t('billingSetupRestart'))}</div>
+      <div class="billing-inline-note">${escapeHtml(t('billingResetLocalHint'))}</div>
+    </section>
+  `
+}
+
+function renderBillingSetupPathCard(label, path, { t }) {
+  return `
+    <article class="billing-setup-item">
+      <span>${escapeHtml(label)}</span>
+      <code class="billing-inline-code">${escapeHtml(path || t('billingUnset'))}</code>
+      ${path ? `
+        <button type="button" class="secondary billing-copy-mini" data-copy-value="${escapeHtml(path)}">${escapeHtml(t('billingSetupCopyPath'))}</button>
+      ` : ''}
+    </article>
+  `
+}
+
+function renderBillingSetupGroup({ title, hint, keys, ready, t }) {
+  return `
+    <article class="billing-config-group">
+      <div class="billing-config-head">
+        <strong>${escapeHtml(title)}</strong>
+        <span class="billing-status-pill ${ready ? 'active' : 'inactive'}">${escapeHtml(ready ? t('billingSetupReady') : t('billingSetupMissing'))}</span>
+      </div>
+      <p class="billing-inline-note">${escapeHtml(hint)}</p>
+      <div class="billing-chip-row">
+        ${keys.map(key => `
+          <button type="button" class="secondary billing-chip-button" data-copy-value="${escapeHtml(key)}">${escapeHtml(key)}</button>
+        `).join('')}
+      </div>
+    </article>
+  `
+}
+
+export function renderOperationsPanelMarkup(operations, { t, formatTimestamp }) {
+  const update = operations?.update ?? {}
+  const telemetry = operations?.telemetry ?? {}
+  const updateStatus = update.available
+    ? t('updateAvailableLabel', { version: update.latestVersion || t('billingUnset') })
+    : update.checkedAt
+      ? t('updateCurrentLabel')
+      : t('updateUnknownLabel')
+
+  return `
+    <div class="launch-grid">
+      <article class="launch-card">
+        <span class="launch-kicker">${escapeHtml(t('updateTitle'))}</span>
+        <strong>${escapeHtml(updateStatus)}</strong>
+        <p>${escapeHtml(t('updateCopy'))}</p>
+        <div class="billing-summary-grid">
+          <div class="billing-summary-item">
+            <span>${escapeHtml(t('updateCurrentVersionLabel'))}</span>
+            <strong>${escapeHtml(update.currentVersion || t('billingUnset'))}</strong>
+          </div>
+          <div class="billing-summary-item">
+            <span>${escapeHtml(t('updateLatestVersionLabel'))}</span>
+            <strong>${escapeHtml(update.latestVersion || t('billingUnset'))}</strong>
+          </div>
+          <div class="billing-summary-item">
+            <span>${escapeHtml(t('billingPaymentUpdatedLabel'))}</span>
+            <strong>${escapeHtml(update.checkedAt ? formatTimestamp(update.checkedAt) : t('billingUnset'))}</strong>
+          </div>
+          <div class="billing-summary-item">
+            <span>${escapeHtml(t('download'))}</span>
+            <strong>${escapeHtml(update.assetName || t('billingUnset'))}</strong>
+          </div>
+        </div>
+        <div class="guide-actions">
+          <button type="button" class="secondary" data-app-action="check-update">${escapeHtml(t('checkForUpdates'))}</button>
+          ${update.downloadUrl ? `<button type="button" class="secondary" data-open-url="${escapeHtml(update.downloadUrl)}">${escapeHtml(t('downloadUpdate'))}</button>` : ''}
+        </div>
+      </article>
+
+      <article class="launch-card">
+        <span class="launch-kicker">${escapeHtml(t('telemetryTitle'))}</span>
+        <strong>${escapeHtml(telemetry.remoteSinkConfigured ? t('telemetryRemoteReady') : t('telemetryLocalOnly'))}</strong>
+        <p>${escapeHtml(t('telemetryCopy'))}</p>
+        <div class="billing-summary-grid">
+          <div class="billing-summary-item">
+            <span>${escapeHtml(t('telemetryEventsLabel'))}</span>
+            <strong>${escapeHtml(String(telemetry.eventCount ?? 0))}</strong>
+          </div>
+          <div class="billing-summary-item">
+            <span>${escapeHtml(t('telemetryLastEventLabel'))}</span>
+            <strong>${escapeHtml(telemetry.lastEventAt ? formatTimestamp(telemetry.lastEventAt) : t('billingUnset'))}</strong>
+          </div>
+          <div class="billing-summary-item">
+            <span>${escapeHtml(t('telemetryCrashLabel'))}</span>
+            <strong>${escapeHtml(telemetry.crashLogPresent ? t('ready') : t('billingUnset'))}</strong>
+          </div>
+          <div class="billing-summary-item">
+            <span>${escapeHtml(t('telemetryLogLabel'))}</span>
+            <strong>${escapeHtml(telemetry.localLogPath || t('billingUnset'))}</strong>
+          </div>
+        </div>
+      </article>
     </div>
   `
 }
@@ -310,7 +513,17 @@ export function renderTaskCardMarkup(task, { t }) {
   `
 }
 
-function renderLatestPaymentMarkup(payment, { t, formatTimestamp, sandboxMode }) {
+function renderLatestPaymentMarkup(payment, { t, formatTimestamp, sandboxMode, bankLocalApproval }) {
+  if (payment.paymentKind === 'card' || payment.provider === 'stripe') {
+    return renderCardPaymentMarkup(payment, { t, formatTimestamp })
+  }
+  if (payment.paymentKind === 'bank' || payment.provider === 'bank-transfer') {
+    return renderBankPaymentMarkup(payment, { t, formatTimestamp, bankLocalApproval })
+  }
+  if (payment.provider === 'cryptomus') {
+    return renderCryptomusPaymentMarkup(payment, { t, formatTimestamp })
+  }
+
   const waitingDirectWallet = payment.provider === 'wallet-direct' && payment.status === 'waiting'
   return `
     <div class="billing-payment-card ${escapeHtml(payment.status)}">
@@ -401,11 +614,192 @@ function renderLatestPaymentMarkup(payment, { t, formatTimestamp, sandboxMode })
   `
 }
 
+function renderCardPaymentMarkup(payment, { t, formatTimestamp }) {
+  const checkoutReady = Boolean(payment.payUrl)
+  const actionLabel = payment.status === 'finished'
+    ? t('billingApplyLicense')
+    : checkoutReady
+      ? t('billingOpenCheckout')
+      : t('billingRefreshPayment')
+
+  return `
+    <div class="billing-payment-card ${escapeHtml(payment.status)}">
+      <div class="billing-payment-head">
+        <strong>${escapeHtml(payment.planLabel || payment.planId || t('billingLatestPaymentTitle'))}</strong>
+        <span class="billing-status-pill ${escapeHtml(payment.status)}">${escapeHtml(getPaymentStatusLabel(payment.status, t))}</span>
+      </div>
+      <div class="billing-inline-note">${escapeHtml(t('billingCardPaymentHint'))}</div>
+      <div class="billing-payment-grid">
+        <div>
+          <span>${escapeHtml(t('billingPayAmountLabel'))}</span>
+          <strong>${escapeHtml(`$${payment.priceAmount || payment.payAmount || '-'}`)}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingEmailLabel'))}</span>
+          <strong>${escapeHtml(payment.email || t('billingUnset'))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingPaymentUpdatedLabel'))}</span>
+          <strong>${escapeHtml(formatTimestamp(payment.updatedAt))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingCardStatusLabel'))}</span>
+          <strong>${escapeHtml(payment.checkoutStatus || payment.subscriptionStatus || t('billingUnset'))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingExpiryLabel'))}</span>
+          <strong>${escapeHtml(payment.currentPeriodEnd ? formatTimestamp(payment.currentPeriodEnd) : t('billingUnset'))}</strong>
+        </div>
+      </div>
+      <div class="billing-actions">
+        ${checkoutReady && payment.status !== 'finished' ? `
+          <button type="button" class="secondary" data-open-url="${escapeHtml(payment.payUrl)}">${escapeHtml(actionLabel)}</button>
+        ` : ''}
+        <button type="button" class="secondary" data-billing-action="refresh-payment" data-payment-id="${escapeHtml(payment.providerPaymentId)}">${escapeHtml(t('billingRefreshPayment'))}</button>
+        ${payment.claimable ? `
+          <button type="button" class="primary" data-billing-action="claim-payment" data-payment-id="${escapeHtml(payment.providerPaymentId)}">${escapeHtml(t('billingApplyLicense'))}</button>
+        ` : ''}
+      </div>
+      ${payment.licenseKeyMasked ? `<div class="billing-inline-note">${escapeHtml(t('billingLicenseReady', { key: payment.licenseKeyMasked }))}</div>` : ''}
+    </div>
+  `
+}
+
+function renderBankPaymentMarkup(payment, { t, formatTimestamp, bankLocalApproval }) {
+  const waiting = payment.status === 'waiting'
+  const review = payment.status === 'review'
+
+  return `
+    <div class="billing-payment-card ${escapeHtml(payment.status)}">
+      <div class="billing-payment-head">
+        <strong>${escapeHtml(payment.planLabel || payment.planId || t('billingLatestPaymentTitle'))}</strong>
+        <span class="billing-status-pill ${escapeHtml(payment.status)}">${escapeHtml(getPaymentStatusLabel(payment.status, t))}</span>
+      </div>
+      <div class="billing-inline-note">${escapeHtml(
+        waiting
+          ? t('billingBankWaitingHint')
+          : review
+            ? t('billingBankReviewHint')
+            : t('billingBankFinishedHint'),
+      )}</div>
+      <div class="billing-payment-grid">
+        <div>
+          <span>${escapeHtml(t('billingPayAmountLabel'))}</span>
+          <strong>${escapeHtml(`${payment.payAmount || '-'} ${String(payment.payCurrency || '').toUpperCase()}`)}</strong>
+          ${payment.payAmount ? `<button type="button" class="billing-copy-button" data-copy-value="${escapeHtml(payment.payAmount)}">${escapeHtml(t('billingCopyAmount'))}</button>` : ''}
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingBankNameLabel'))}</span>
+          <strong>${escapeHtml(payment.recipientBankName || t('billingUnset'))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingRecipientLabel'))}</span>
+          <strong>${escapeHtml(payment.recipientName || t('billingUnset'))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingPaymentUpdatedLabel'))}</span>
+          <strong>${escapeHtml(formatTimestamp(payment.updatedAt))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingQuoteExpiryLabel'))}</span>
+          <strong>${escapeHtml(payment.quoteExpiresAt ? formatTimestamp(payment.quoteExpiresAt) : t('billingUnset'))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingFastAliasLabel'))}</span>
+          <strong>${escapeHtml(payment.bankFastAlias || payment.bankSwift || t('billingUnset'))}</strong>
+        </div>
+      </div>
+      ${payment.payAddress ? `
+        <div class="billing-address-shell">
+          <code class="billing-address">${escapeHtml(payment.payAddress)}</code>
+          <button type="button" class="secondary billing-copy-address" data-copy-value="${escapeHtml(payment.payAddress)}">${escapeHtml(t('billingCopyIban'))}</button>
+        </div>
+      ` : ''}
+      ${payment.paymentReference ? `
+        <div class="billing-address-shell">
+          <code class="billing-address">${escapeHtml(payment.paymentReference)}</code>
+          <button type="button" class="secondary billing-copy-address" data-copy-value="${escapeHtml(payment.paymentReference)}">${escapeHtml(t('billingCopyReference'))}</button>
+        </div>
+      ` : ''}
+      <div class="billing-actions">
+        ${waiting ? `
+          <button type="button" class="secondary" data-billing-action="mark-bank-sent" data-payment-id="${escapeHtml(payment.providerPaymentId)}">${escapeHtml(t('billingMarkBankSent'))}</button>
+        ` : ''}
+        <button type="button" class="secondary" data-billing-action="refresh-payment" data-payment-id="${escapeHtml(payment.providerPaymentId)}">${escapeHtml(t('billingRefreshPayment'))}</button>
+        ${review && bankLocalApproval ? `
+          <button type="button" class="secondary" data-billing-action="approve-bank-payment" data-payment-id="${escapeHtml(payment.providerPaymentId)}">${escapeHtml(t('billingApproveManually'))}</button>
+        ` : ''}
+        ${payment.claimable ? `
+          <button type="button" class="primary" data-billing-action="claim-payment" data-payment-id="${escapeHtml(payment.providerPaymentId)}">${escapeHtml(t('billingApplyLicense'))}</button>
+        ` : ''}
+      </div>
+      ${payment.licenseKeyMasked ? `<div class="billing-inline-note">${escapeHtml(t('billingLicenseReady', { key: payment.licenseKeyMasked }))}</div>` : ''}
+    </div>
+  `
+}
+
+function renderCryptomusPaymentMarkup(payment, { t, formatTimestamp }) {
+  return `
+    <div class="billing-payment-card ${escapeHtml(payment.status)}">
+      <div class="billing-payment-head">
+        <strong>${escapeHtml(payment.planLabel || payment.planId || t('billingLatestPaymentTitle'))}</strong>
+        <span class="billing-status-pill ${escapeHtml(payment.status)}">${escapeHtml(getPaymentStatusLabel(payment.status, t))}</span>
+      </div>
+      <div class="billing-inline-note">${escapeHtml(t('billingCryptomusHint'))}</div>
+      <div class="billing-payment-grid">
+        <div>
+          <span>${escapeHtml(t('billingPayAmountLabel'))}</span>
+          <strong>${escapeHtml(`${payment.payAmount || '-'} ${String(payment.payCurrency || '').toUpperCase()}`)}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingNetworkLabel'))}</span>
+          <strong>${escapeHtml(payment.cryptoNetworkLabel || payment.cryptoNetwork || t('billingUnset'))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingPaymentUpdatedLabel'))}</span>
+          <strong>${escapeHtml(formatTimestamp(payment.updatedAt))}</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(t('billingQuoteExpiryLabel'))}</span>
+          <strong>${escapeHtml(payment.quoteExpiresAt ? formatTimestamp(payment.quoteExpiresAt) : t('billingUnset'))}</strong>
+        </div>
+      </div>
+      ${payment.payAddress ? `
+        <div class="billing-address-shell">
+          <code class="billing-address">${escapeHtml(payment.payAddress)}</code>
+          <button type="button" class="secondary billing-copy-address" data-copy-value="${escapeHtml(payment.payAddress)}">${escapeHtml(t('billingCopyAddress'))}</button>
+        </div>
+      ` : ''}
+      <div class="billing-actions">
+        ${payment.payUrl ? `
+          <button type="button" class="secondary" data-open-url="${escapeHtml(payment.payUrl)}">${escapeHtml(t('billingOpenCryptomus'))}</button>
+        ` : ''}
+        <button type="button" class="secondary" data-billing-action="refresh-payment" data-payment-id="${escapeHtml(payment.providerPaymentId)}">${escapeHtml(t('billingRefreshPayment'))}</button>
+        ${payment.claimable ? `
+          <button type="button" class="primary" data-billing-action="claim-payment" data-payment-id="${escapeHtml(payment.providerPaymentId)}">${escapeHtml(t('billingApplyLicense'))}</button>
+        ` : ''}
+      </div>
+      ${payment.txHash && payment.explorerUrl ? `
+        <div class="billing-actions">
+          <a class="secondary billing-link-button" href="${escapeHtml(`${payment.explorerUrl}${payment.txHash}`)}" target="_blank" rel="noreferrer">${escapeHtml(t('billingOpenExplorer'))}</a>
+        </div>
+      ` : ''}
+      ${payment.licenseKeyMasked ? `<div class="billing-inline-note">${escapeHtml(t('billingLicenseReady', { key: payment.licenseKeyMasked }))}</div>` : ''}
+    </div>
+  `
+}
+
 function getPaymentStatusLabel(status, t) {
   if (status === 'waiting') {
     return t('billingStatusWaitingPayment')
   }
-  if (status === 'finished' || status === 'confirmed' || status === 'sending') {
+  if (status === 'review') {
+    return t('billingStatusReviewPayment')
+  }
+  if (status === 'confirming' || status === 'processing') {
+    return t('billingStatusConfirmingPayment')
+  }
+  if (status === 'finished' || status === 'confirmed' || status === 'sending' || status === 'paid' || status === 'active') {
     return t('billingStatusPaid')
   }
   if (status === 'failed' || status === 'expired' || status === 'refunded') {

@@ -1,6 +1,6 @@
 {
   "name": "modai-ultralight",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "description": "Ultra-light modAI assistant for macOS Apple Silicon with pluggable model providers and zero npm runtime dependencies",
   "type": "module",
   "private": true,
@@ -20,6 +20,10 @@
     "package:mac:web": "node scripts/build-macos-app.mjs",
     "build:mac": "node scripts/build-tauri-macos-app.mjs",
     "package:mac": "node scripts/build-tauri-macos-app.mjs",
+    "build:mac:arm64": "node scripts/build-tauri-macos-app.mjs --target aarch64-apple-darwin",
+    "package:mac:arm64": "node scripts/build-tauri-macos-app.mjs --target aarch64-apple-darwin",
+    "build:mac:x64": "node scripts/build-tauri-macos-app.mjs --target x86_64-apple-darwin",
+    "package:mac:x64": "node scripts/build-tauri-macos-app.mjs --target x86_64-apple-darwin",
     "build:portable": "node scripts/build-tauri-portable-app.mjs",
     "package:portable": "node scripts/build-tauri-portable-app.mjs",
     "cargo:check": "cargo check --manifest-path src-tauri/Cargo.toml"

@@ -1,5 +1,6 @@
 import { chmod, cp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -28,6 +29,7 @@ const archivePath = platform === 'win32'
   ? join(distDir, `${artifactName}.zip`)
   : join(distDir, `${artifactName}.tar.gz`)
 const cargoHomeDir = process.env.CARGO_HOME || join(process.env.HOME ?? rootDir, '.cargo')
+const cargoExecutable = resolveCargoExecutable(cargoHomeDir)
 
 const readme = `modAI Tauri portable build for ${platformLabel} ${arch}
 
@@ -50,7 +52,7 @@ Notes
 - This portable package keeps the runtime next to the executable in ./runtime
 `
 
-execFileSync('cargo', ['build', '--release', '--manifest-path', join(rootDir, 'src-tauri', 'Cargo.toml')], {
+execFileSync(cargoExecutable, ['build', '--release', '--manifest-path', join(rootDir, 'src-tauri', 'Cargo.toml')], {
   cwd: rootDir,
   stdio: 'inherit',
   env: buildCargoEnv(cargoHomeDir),
@@ -81,12 +83,21 @@ function buildCargoEnv(cargoHome) {
     ...process.env,
     CARGO_HOME: cargoHome,
   }
+  const cargoBinDir = join(cargoHome, 'bin')
+  if (existsSync(cargoBinDir)) {
+    envVars.PATH = `${cargoBinDir}:${process.env.PATH ?? ''}`
+  }
 
   if (process.env.MODAI_CARGO_NET_OFFLINE !== 'false') {
     envVars.CARGO_NET_OFFLINE = 'true'
   }
 
   return envVars
+}
+
+function resolveCargoExecutable(cargoHome) {
+  const cargoBin = join(cargoHome, 'bin', platform === 'win32' ? 'cargo.exe' : 'cargo')
+  return existsSync(cargoBin) ? cargoBin : 'cargo'
 }
 
 function createArchive(sourceDir, outputPath) {
