@@ -1,4 +1,4 @@
-import { chmod, cp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -28,6 +28,7 @@ const iconIcnsSource = join(rootDir, 'src-tauri', 'icons', 'modAI.icns')
 const iconIcnsTarget = join(resourcesDir, 'modAI.icns')
 const iconPngSource = join(rootDir, 'src-tauri', 'icons', 'icon.png')
 const iconPngTarget = join(resourcesDir, 'modAI.png')
+const packageVersion = await readPackageVersion()
 
 const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -46,9 +47,9 @@ const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>${packageVersion}</string>
   <key>CFBundleVersion</key>
-  <string>0.1.0</string>
+  <string>${packageVersion}</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
 </dict>
@@ -174,4 +175,9 @@ function mapMacArtifactArch(value) {
     return 'x64'
   }
   return process.arch
+}
+
+async function readPackageVersion() {
+  const manifest = JSON.parse(await readFile(join(rootDir, 'package.json'), 'utf8'))
+  return String(manifest.version ?? '0.1.0')
 }

@@ -2,6 +2,7 @@ import { access, cp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ensureIcoFromPng } from './icon-helpers.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(__dirname, '..')
@@ -9,6 +10,7 @@ const brandSvgPath = join(rootDir, 'modai', 'src', 'web', 'static', 'brand-mark.
 const iconsDir = join(rootDir, 'src-tauri', 'icons')
 const iconsetDir = '/tmp/modai.iconset'
 const iconPngPath = join(iconsDir, 'icon.png')
+const iconIcoPath = join(iconsDir, 'icon.ico')
 const iconIcnsPath = join(iconsDir, 'modAI.icns')
 const tempIcnsPath = '/tmp/modAI.icns'
 
@@ -120,6 +122,7 @@ await writeFile(brandSvgPath, brandSvg, 'utf8')
 await rm(iconsetDir, { recursive: true, force: true })
 await rm(tempIcnsPath, { force: true })
 renderPng(iconPngPath, 1024)
+await ensureIcoFromPng(iconPngPath, iconIcoPath)
 if (!await exists(iconIcnsPath)) {
   try {
     buildIconSet(iconPngPath, iconsetDir, tempIcnsPath)
@@ -131,6 +134,7 @@ if (!await exists(iconIcnsPath)) {
 
 console.log(`Generated ${brandSvgPath}`)
 console.log(`Generated ${iconPngPath}`)
+console.log(`Generated ${iconIcoPath}`)
 console.log(`Prepared ${iconIcnsPath}`)
 
 function renderPng(outputPath, size) {

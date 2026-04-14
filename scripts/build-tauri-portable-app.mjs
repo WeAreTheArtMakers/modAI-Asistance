@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ensureIcoFromPng } from './icon-helpers.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(__dirname, '..')
@@ -24,6 +25,7 @@ const readmePath = join(bundleDir, 'README.txt')
 const binarySource = join(rootDir, 'src-tauri', 'target', 'release', binaryName)
 const binaryTarget = join(bundleDir, targetBinaryName)
 const iconSource = join(rootDir, 'src-tauri', 'icons', 'icon.png')
+const iconIcoSource = join(rootDir, 'src-tauri', 'icons', 'icon.ico')
 const iconTarget = join(bundleDir, 'modAI.png')
 const archivePath = platform === 'win32'
   ? join(distDir, `${artifactName}.zip`)
@@ -51,6 +53,10 @@ Notes
 - Runtime logs are written into the user's modAI state directory
 - This portable package keeps the runtime next to the executable in ./runtime
 `
+
+if (platform === 'win32') {
+  await ensureIcoFromPng(iconSource, iconIcoSource)
+}
 
 execFileSync(cargoExecutable, ['build', '--release', '--manifest-path', join(rootDir, 'src-tauri', 'Cargo.toml')], {
   cwd: rootDir,

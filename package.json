@@ -1,6 +1,6 @@
 {
   "name": "modai-ultralight",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Ultra-light modAI assistant for macOS Apple Silicon with pluggable model providers and zero npm runtime dependencies",
   "type": "module",
   "private": true,

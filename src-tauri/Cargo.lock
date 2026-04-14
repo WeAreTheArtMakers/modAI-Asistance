@@ -1860,7 +1860,7 @@ dependencies = [
 
 [[package]]
 name = "modai-tauri"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "tauri",
  "tauri-build",
