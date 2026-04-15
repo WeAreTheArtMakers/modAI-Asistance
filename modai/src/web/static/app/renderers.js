@@ -201,10 +201,23 @@ function renderBillingSetupMarkup(billing, { t }) {
   const environment = billing?.environment ?? {}
   const configFiles = environment.configFiles ?? []
   const setup = environment.setup ?? {}
+  const hostedOptional = environment.hosted?.configured !== true && (environment.crypto?.configured || environment.bank?.recipientReady)
+  const bankPartial = environment.bank?.recipientReady === true && environment.bank?.configured !== true
   const setupCards = [
     [t('billingSetupHomeFile'), configFiles[0] ?? ''],
     [t('billingSetupRuntimeFile'), configFiles[1] ?? ''],
   ]
+  const bankDetails = [
+    [t('billingRecipientLabel'), environment.bank?.accountName || ''],
+    [t('billingBankNameLabel'), environment.bank?.bankName || ''],
+    [t('billingSwiftLabel'), environment.bank?.swift || ''],
+    [t('billingQuoteCurrencyLabel'), environment.bank?.quoteCurrency || ''],
+    [t('billingQuoteRateLabel'), environment.bank?.usdFxRate ? String(environment.bank.usdFxRate) : ''],
+    [t('billingFastAliasLabel'), environment.bank?.fastAlias || ''],
+  ].filter(([, value]) => value)
+  if (environment.bank?.iban) {
+    bankDetails.splice(2, 0, [t('billingCopyIban'), formatIban(environment.bank.iban)])
+  }
 
   return `
     <section class="billing-form-card">
@@ -214,9 +227,9 @@ function renderBillingSetupMarkup(billing, { t }) {
           <p class="billing-copy">${escapeHtml(t('billingSetupCopy'))}</p>
         </div>
         <div class="billing-pill-row">
-          <span class="billing-status-pill ${environment.crypto?.mode === 'cryptomus' ? 'active' : 'inactive'}">${escapeHtml(environment.crypto?.mode === 'cryptomus' ? t('billingSetupReady') : t('billingSetupMissing'))} ${escapeHtml(t('billingSetupCryptomusShort'))}</span>
-          <span class="billing-status-pill ${environment.hosted?.configured ? 'active' : 'inactive'}">${escapeHtml(environment.hosted?.configured ? t('billingSetupReady') : t('billingSetupMissing'))} ${escapeHtml(t('billingSetupHostedShort'))}</span>
-          <span class="billing-status-pill ${environment.bank?.configured ? 'active' : 'inactive'}">${escapeHtml(environment.bank?.configured ? t('billingSetupReady') : t('billingSetupMissing'))} ${escapeHtml(t('billingSetupBankShort'))}</span>
+          ${renderSetupPill(t('billingSetupCryptomusShort'), environment.crypto?.mode === 'cryptomus', false, false, t)}
+          ${renderSetupPill(t('billingSetupHostedShort'), environment.hosted?.configured === true, false, hostedOptional, t)}
+          ${renderSetupPill(t('billingSetupBankShort'), environment.bank?.configured === true, bankPartial, false, t)}
         </div>
       </div>
 
@@ -230,6 +243,8 @@ function renderBillingSetupMarkup(billing, { t }) {
           hint: t('billingSetupCryptomusHint'),
           keys: setup.cryptomusKeys ?? [],
           ready: environment.crypto?.mode === 'cryptomus',
+          partial: false,
+          optional: false,
           t,
         })}
         ${renderBillingSetupGroup({
@@ -239,13 +254,18 @@ function renderBillingSetupMarkup(billing, { t }) {
           }),
           keys: setup.hostedKeys ?? [],
           ready: environment.hosted?.configured === true,
+          partial: false,
+          optional: hostedOptional,
           t,
         })}
         ${renderBillingSetupGroup({
           title: t('billingSetupBankTitle'),
-          hint: t('billingSetupBankHint'),
+          hint: bankPartial ? t('billingSetupBankPartialHint') : t('billingSetupBankHint'),
           keys: setup.bankKeys ?? [],
           ready: environment.bank?.configured === true,
+          partial: bankPartial,
+          optional: false,
+          details: bankDetails,
           t,
         })}
       </div>
@@ -257,6 +277,18 @@ function renderBillingSetupMarkup(billing, { t }) {
       <div class="billing-inline-note">${escapeHtml(t('billingResetLocalHint'))}</div>
     </section>
   `
+}
+
+function renderSetupPill(title, ready, partial, optional, t) {
+  const status = ready ? 'active' : partial ? 'review' : 'inactive'
+  const label = ready
+    ? t('billingSetupReady')
+    : partial
+      ? t('billingSetupPartial')
+      : optional
+        ? t('billingSetupOptional')
+        : t('billingSetupMissing')
+  return `<span class="billing-status-pill ${status}">${escapeHtml(label)} ${escapeHtml(title)}</span>`
 }
 
 function renderBillingSetupPathCard(label, path, { t }) {
@@ -271,14 +303,34 @@ function renderBillingSetupPathCard(label, path, { t }) {
   `
 }
 
-function renderBillingSetupGroup({ title, hint, keys, ready, t }) {
+function renderBillingSetupGroup({ title, hint, keys, ready, partial = false, optional = false, details = [], t }) {
+  const status = ready ? 'active' : partial ? 'review' : 'inactive'
+  const label = ready
+    ? t('billingSetupReady')
+    : partial
+      ? t('billingSetupPartial')
+      : optional
+        ? t('billingSetupOptional')
+        : t('billingSetupMissing')
   return `
     <article class="billing-config-group">
       <div class="billing-config-head">
         <strong>${escapeHtml(title)}</strong>
-        <span class="billing-status-pill ${ready ? 'active' : 'inactive'}">${escapeHtml(ready ? t('billingSetupReady') : t('billingSetupMissing'))}</span>
+        <span class="billing-status-pill ${status}">${escapeHtml(label)}</span>
       </div>
       <p class="billing-inline-note">${escapeHtml(hint)}</p>
+      ${details.length ? `
+        <div class="billing-config-summary">
+          <div class="billing-config-summary-grid">
+            ${details.map(([labelText, value]) => `
+              <div class="billing-config-detail">
+                <span>${escapeHtml(labelText)}</span>
+                <strong>${escapeHtml(value)}</strong>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
       <div class="billing-chip-row">
         ${keys.map(key => `
           <button type="button" class="secondary billing-chip-button" data-copy-value="${escapeHtml(key)}">${escapeHtml(key)}</button>
@@ -286,6 +338,11 @@ function renderBillingSetupGroup({ title, hint, keys, ready, t }) {
       </div>
     </article>
   `
+}
+
+function formatIban(value) {
+  const compact = String(value ?? '').replace(/\s+/g, '').toUpperCase()
+  return compact.replace(/(.{4})/g, '$1 ').trim()
 }
 
 export function renderOperationsPanelMarkup(operations, { t, formatTimestamp }) {

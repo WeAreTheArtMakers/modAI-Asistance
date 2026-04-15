@@ -21,7 +21,7 @@ It combines:
 - session memory backed by SQLite
 - local-first workflows with Ollama as the default path
 
-The product is under active development. The current priority is a clean ChatGPT/Codex-style interface, reliable multimodal chat, safe computer-use flows, and a deployment path that works both locally and on the web.
+The product is under active development. The current priority is a focused local-first interface, reliable multimodal chat, safe computer-use flows, and a deployment path that works both locally and on the web.
 
 ## Marketing copy
 
@@ -235,7 +235,7 @@ This application is intended to be fully open-source. The codebase is evolving q
 
 Current improvement tracks:
 
-- cleaner ChatGPT/Codex-grade UI
+- cleaner desktop-first UI
 - stronger language manager and future i18n support
 - better mobile layout
 - richer multimodal reasoning

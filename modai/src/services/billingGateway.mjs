@@ -292,9 +292,16 @@ export function getBillingEnvironment() {
     },
     bank: {
       configured: bankTransfer.configured,
+      recipientReady: Boolean(bankTransfer.accountName && bankTransfer.bankName && bankTransfer.iban),
       quoteCurrency: bankTransfer.quoteCurrency,
+      usdFxRate: Number.isFinite(bankTransfer.usdFxRate) ? bankTransfer.usdFxRate : null,
       localApprovalAvailable: bankTransfer.localApprovalAvailable,
       fastSupported: Boolean(bankTransfer.fastAlias),
+      accountName: bankTransfer.accountName,
+      bankName: bankTransfer.bankName,
+      iban: bankTransfer.iban,
+      swift: bankTransfer.swift,
+      fastAlias: bankTransfer.fastAlias,
       providerLabel: 'manual-bank',
     },
     crypto: {

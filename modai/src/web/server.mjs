@@ -2238,6 +2238,7 @@ function buildBillingEnvironmentSnapshot() {
         'MODAI_BANK_ACCOUNT_NAME',
         'MODAI_BANK_NAME',
         'MODAI_BANK_IBAN',
+        'MODAI_BANK_SWIFT',
         'MODAI_BANK_USD_TO_TRY_RATE',
         'MODAI_BANK_QUOTE_CURRENCY',
         'MODAI_BANK_REFERENCE_PREFIX',

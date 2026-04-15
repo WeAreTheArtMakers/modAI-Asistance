@@ -148,6 +148,8 @@ button {
 }
 
 .sidebar {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.45rem;
@@ -163,8 +165,9 @@ button {
 .sidebar-brand {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 0.55rem;
+  width: 100%;
   min-width: 0;
   padding-top: 0.1rem;
 }
@@ -173,6 +176,7 @@ button {
   display: flex;
   align-items: center;
   gap: 0.7rem;
+  flex: 1;
   min-width: 0;
 }
 
@@ -203,13 +207,10 @@ button {
 }
 
 .sidebar-toggle {
-  position: absolute;
-  top: 50%;
-  left: calc(var(--sidebar-width-current) - 2.2rem);
+  position: relative;
+  flex: 0 0 auto;
   width: 1.9rem;
   height: 1.9rem;
-  transform: translateY(-50%);
-  z-index: 12;
   border-color: rgba(123, 151, 255, 0.22);
   background:
     linear-gradient(180deg, rgba(28, 33, 46, 0.96), rgba(17, 21, 29, 0.94)),
@@ -274,13 +275,13 @@ button {
 
 .shell[data-sidebar-collapsed="true"] .sidebar-brand {
   flex-direction: row;
-  justify-content: flex-start;
+  justify-content: space-between;
   width: 100%;
 }
 
 .shell[data-sidebar-collapsed="true"] .sidebar-brand-main {
-  justify-content: center;
-  width: 100%;
+  justify-content: flex-start;
+  flex: 0 1 auto;
 }
 
 .shell[data-sidebar-collapsed="true"] .brand-copy,
@@ -498,6 +499,12 @@ button:disabled {
   color: var(--muted);
 }
 
+.sidebar-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-list,
 .notes-list,
 .provider-list,
@@ -597,6 +604,8 @@ button:disabled {
 }
 
 .main-shell {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.22rem;
@@ -2155,6 +2164,41 @@ textarea {
 .billing-status-pill.inactive {
   color: var(--warning);
   border-color: rgba(239, 191, 108, 0.28);
+}
+
+.billing-config-summary {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.55rem;
+}
+
+.billing-config-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.5rem;
+}
+
+.billing-config-detail {
+  display: grid;
+  gap: 0.14rem;
+  padding: 0.58rem 0.68rem;
+  border: 1px solid var(--line);
+  border-radius: 0.78rem;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.billing-config-detail span {
+  font-size: 0.74rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.billing-config-detail strong,
+.billing-config-detail code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
 }
 
 .billing-address {
